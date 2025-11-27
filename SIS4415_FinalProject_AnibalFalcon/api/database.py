@@ -3,7 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from api.config import settings
 
-# Crear engine
+# Create engine
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
@@ -11,14 +11,14 @@ engine = create_engine(
     max_overflow=20
 )
 
-# Session local
+# Local session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base para modelos
+# Base for models
 Base = declarative_base()
 
 
-# Dependency para obtener DB session
+# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:

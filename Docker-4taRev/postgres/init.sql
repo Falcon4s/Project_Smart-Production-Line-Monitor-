@@ -4,7 +4,7 @@
 -- Author: Anibal Simeon Falcon Castro
 -- ============================================
 
--- Tabla de usuarios (para JWT authentication)
+-- Users table (for JWT authentication)
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabla de máquinas (catálogo)
+-- Machines table (catalog)
 CREATE TABLE machines (
     id SERIAL PRIMARY KEY,
     machine_id VARCHAR(20) UNIQUE NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE machines (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabla de mediciones históricas
+-- Historical measurements table
 CREATE TABLE measurements (
     id SERIAL PRIMARY KEY,
     machine_id VARCHAR(20) REFERENCES machines(machine_id) ON DELETE CASCADE,
@@ -35,11 +35,11 @@ CREATE TABLE measurements (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Índice para consultas rápidas por máquina y timestamp
+-- Index for quick queries by machine and timestamp
 CREATE INDEX idx_measurements_machine_timestamp 
 ON measurements(machine_id, timestamp DESC);
 
--- Tabla de estado actual de máquinas (optimización)
+-- Current machine status table (optimization)
 CREATE TABLE machine_status (
     machine_id VARCHAR(20) PRIMARY KEY REFERENCES machines(machine_id) ON DELETE CASCADE,
     temperature DECIMAL(5,2),
@@ -49,7 +49,7 @@ CREATE TABLE machine_status (
     last_updated TIMESTAMP NOT NULL
 );
 
--- Tabla de alertas
+-- Alerts table
 CREATE TABLE alerts (
     id SERIAL PRIMARY KEY,
     machine_id VARCHAR(20) REFERENCES machines(machine_id) ON DELETE CASCADE,
@@ -61,36 +61,36 @@ CREATE TABLE alerts (
     resolved_at TIMESTAMP
 );
 
--- Índice para alertas no resueltas
+-- Index for unresolved alerts
 CREATE INDEX idx_alerts_unresolved 
 ON alerts(resolved, created_at DESC) WHERE resolved = FALSE;
 
 -- ============================================
--- DATOS INICIALES
+-- INITIAL DATA
 -- ============================================
 
--- Insertar máquinas de ejemplo
+-- Insert example machines
 INSERT INTO machines (machine_id, name, location, status) VALUES
 ('MX-01', 'Assembly Line Alpha', 'Building A - Floor 1', 'active'),
 ('MX-02', 'Welding Station Beta', 'Building A - Floor 2', 'active'),
 ('MX-03', 'Quality Control Gamma', 'Building B - Floor 1', 'active');
 
--- Insertar estado inicial de máquinas
+-- Insert initial machine status
 INSERT INTO machine_status (machine_id, temperature, vibration, production_count, fault, last_updated) VALUES
 ('MX-01', 65.0, 20, 0, FALSE, CURRENT_TIMESTAMP),
 ('MX-02', 72.0, 25, 0, FALSE, CURRENT_TIMESTAMP),
 ('MX-03', 68.0, 18, 0, FALSE, CURRENT_TIMESTAMP);
 
--- Usuario de prueba (password será hasheado en el backend)
--- Placeholder temporal
+-- Test user (password will be hashed in the backend)
+-- Temporary placeholder
 INSERT INTO users (username, email, password_hash) VALUES
 ('admin', 'admin@smartproduction.com', 'placeholder_will_be_updated');
 
 -- ============================================
--- VISTAS ÚTILES (para reportes en Node-RED)
+-- USEFUL VIEWS (for Node-RED reports)
 -- ============================================
 
--- Vista: estadísticas últimas 24 horas por máquina
+-- View: statistics for last 24 hours per machine
 CREATE VIEW machine_stats_24h AS
 SELECT 
     m.machine_id,
@@ -110,7 +110,7 @@ LEFT JOIN measurements ms ON m.machine_id = ms.machine_id
 WHERE ms.timestamp > NOW() - INTERVAL '24 hours'
 GROUP BY m.machine_id, m.name, m.location;
 
--- Vista: alertas activas
+-- View: active alerts
 CREATE VIEW active_alerts AS
 SELECT 
     a.id,
@@ -134,7 +134,7 @@ ORDER BY
     END,
     a.created_at DESC;
 
--- Vista: resumen general del sistema
+-- View: system overview
 CREATE VIEW system_overview AS
 SELECT 
     (SELECT COUNT(*) FROM machines WHERE status = 'active') as active_machines,
@@ -145,10 +145,10 @@ SELECT
     (SELECT MAX(vibration) FROM machine_status) as max_system_vibration;
 
 -- ============================================
--- FUNCIONES ÚTILES
+-- USEFUL FUNCTIONS
 -- ============================================
 
--- Función para limpiar mediciones antiguas (más de 30 días)
+-- Function to clean old measurements (more than 30 days)
 CREATE OR REPLACE FUNCTION cleanup_old_measurements()
 RETURNS INTEGER AS $$
 DECLARE
@@ -162,25 +162,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Función para generar alerta automática
+-- Function to generate automatic alert
 CREATE OR REPLACE FUNCTION check_and_create_alert()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Alerta de temperatura alta
+    -- High temperature alert
     IF NEW.temperature > 90 THEN
         INSERT INTO alerts (machine_id, alert_type, severity, message)
         VALUES (NEW.machine_id, 'high_temperature', 'critical', 
                 'Temperature exceeded 90°C: ' || NEW.temperature || '°C');
     END IF;
     
-    -- Alerta de vibración alta
+    -- High vibration alert
     IF NEW.vibration > 80 THEN
         INSERT INTO alerts (machine_id, alert_type, severity, message)
         VALUES (NEW.machine_id, 'high_vibration', 'high', 
                 'Vibration exceeded safe threshold: ' || NEW.vibration);
     END IF;
     
-    -- Alerta de falla
+    -- Fault alert
     IF NEW.fault = TRUE THEN
         INSERT INTO alerts (machine_id, alert_type, severity, message)
         VALUES (NEW.machine_id, 'machine_fault', 'critical', 
@@ -191,7 +191,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger para alertas automáticas en nuevas mediciones
+-- Trigger for automatic alerts on new measurements
 CREATE TRIGGER trigger_alert_on_measurement
 AFTER INSERT ON measurements
 FOR EACH ROW

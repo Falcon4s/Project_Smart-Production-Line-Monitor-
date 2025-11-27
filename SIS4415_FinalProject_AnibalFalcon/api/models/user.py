@@ -12,8 +12,8 @@ class User(Base):
     full_name = Column(String(100))
     password_hash = Column(String(255), nullable=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
-    
-    # Alias para compatibilidad con el código
+
+    # Alias for code compatibility
     @property
     def hashed_password(self):
         return self.password_hash

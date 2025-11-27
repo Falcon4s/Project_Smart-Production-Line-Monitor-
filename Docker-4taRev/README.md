@@ -1,69 +1,69 @@
 # Docker Setup - Smart Production Line Monitor
 
-Este directorio contiene la configuración Docker para el proyecto SIS4415.
+This directory contains the Docker configuration for the SIS4415 project.
 
-## 🚀 Inicio Rápido
+## Quick Start
 
-### Levantar los servicios
+### Start services
 ```bash
 docker-compose up -d
 ```
 
-### Verificar que estén corriendo
+### Verify services are running
 ```bash
 docker-compose ps
 ```
 
-### Ver logs
+### View logs
 ```bash
 docker-compose logs -f postgres
 ```
 
-### Detener los servicios
+### Stop services
 ```bash
 docker-compose down
 ```
 
-### Detener y eliminar volúmenes (⚠️ elimina todos los datos)
+### Stop and remove volumes (WARNING: deletes all data)
 ```bash
 docker-compose down -v
 ```
 
-## 📊 Conectar a la Base de Datos
+## Connect to Database
 
-### Desde DataGrip
+### From DataGrip
 - **Host:** `localhost`
 - **Port:** `5432`
 - **Database:** `smart_production`
 - **User:** `sis4415_user`
 - **Password:** `production2025`
 
-### Desde terminal (psql)
+### From terminal (psql)
 ```bash
 docker exec -it sis4415-postgres psql -U sis4415_user -d smart_production
 ```
 
-## 🗄️ Estructura de Base de Datos
+## Database Structure
 
-### Tablas principales
-- `users` - Usuarios del sistema
-- `machines` - Catálogo de máquinas
-- `measurements` - Mediciones históricas
-- `machine_status` - Estado actual de cada máquina
-- `alerts` - Sistema de alertas
+### Main tables
+- `users` - System users
+- `machines` - Machine catalog
+- `measurements` - Historical measurements
+- `machine_status` - Current state of each machine
+- `alerts` - Alert system
 
-### Vistas
-- `machine_stats_24h` - Estadísticas últimas 24 horas
-- `active_alerts` - Alertas sin resolver
-- `system_overview` - Resumen general del sistema
+### Views
+- `machine_stats_24h` - Statistics for last 24 hours
+- `active_alerts` - Unresolved alerts
+- `system_overview` - System overview
 
-### Funciones
-- `cleanup_old_measurements()` - Limpia datos antiguos
-- `check_and_create_alert()` - Genera alertas automáticas
+### Functions
+- `cleanup_old_measurements()` - Cleans old data
+- `check_and_create_alert()` - Generates automatic alerts
 
-## 📝 Variables de Entorno
+## Environment Variables
 
-Edita el archivo `.env` para cambiar las credenciales:
+Edit the `.env` file to change credentials:
 ```env
 POSTGRES_USER=sis4415_user
 POSTGRES_PASSWORD=production2025
@@ -71,41 +71,41 @@ POSTGRES_DB=smart_production
 POSTGRES_PORT=5432
 ```
 
-## ⚙️ Comandos Útiles
+## Useful Commands
 
-### Resetear la base de datos
+### Reset database
 ```bash
 docker-compose down -v
 docker-compose up -d
 ```
 
-### Hacer backup
+### Create backup
 ```bash
 docker exec sis4415-postgres pg_dump -U sis4415_user smart_production > backup.sql
 ```
 
-### Restaurar backup
+### Restore backup
 ```bash
 docker exec -i sis4415-postgres psql -U sis4415_user smart_production < backup.sql
 ```
 
-### Ejecutar queries directamente
+### Execute queries directly
 ```bash
 docker exec -it sis4415-postgres psql -U sis4415_user -d smart_production -c "SELECT * FROM machines;"
 ```
 
-## 🔒 Seguridad
+## Security
 
-⚠️ **IMPORTANTE:** Las credenciales en este proyecto son solo para desarrollo local.
-En producción, usa variables de entorno seguras y nunca commitees credenciales.
+WARNING: The credentials in this project are only for local development.
+In production, use secure environment variables and never commit credentials.
 
-## 📦 Volúmenes
+## Volumes
 
-Los datos se persisten en el volumen Docker `postgres_data`. 
-Para eliminar todos los datos: `docker-compose down -v`
+Data is persisted in the Docker volume `postgres_data`.
+To delete all data: `docker-compose down -v`
 
 ---
 
-**Proyecto:** SIS4415 - Smart Production Line Monitor  
-**Autor:** Anibal Simeon Falcon Castro  
-**Opción:** A
+**Project:** SIS4415 - Smart Production Line Monitor
+**Author:** Anibal Simeon Falcon Castro
+**Option:** A
