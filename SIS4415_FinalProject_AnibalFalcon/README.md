@@ -1,132 +1,166 @@
 # Smart Production Line Monitor - Final Project SIS4415
 
-**Proyecto:** Opción A - Smart Production Line Monitor  
-**Estudiante:** Anibal Simeon Falcon Castro  
-**Curso:** SIS4415 - Informática en la Cuarta Revolución Industrial  
-**Fecha:** 27 de Noviembre 2025
+**Project:** Option A - Smart Production Line Monitor  
+**Student:** Anibal Simeon Falcon Castro  
+**Course:** SIS4415 - Information Technology in the Fourth Industrial Revolution  
+**Date:** November 27, 2025
 
 ---
 
-## Video Demostración
+## Video Demonstration
 
-[Link al video en YouTube](TU_LINK_AQUI)
-
----
-
-## Descripción del Proyecto
-
-Sistema de monitoreo inteligente para líneas de producción que simula 3 máquinas industriales (MX-01, MX-02, MX-03) enviando datos en tiempo real sobre temperatura, vibración, producción y estado de fallas.
-
-El sistema integra:
-- Simulación IoT con Node-RED
-- API REST con autenticación JWT
-- API GraphQL con subscriptions en tiempo real
-- Base de datos PostgreSQL
-- Dashboard interactivo con controles y visualizaciones
+**Link:** [YouTube Video - System Demonstration](YOUR_VIDEO_LINK_HERE)
 
 ---
 
-## Tecnologías Utilizadas
+## Project Description
+
+An intelligent monitoring system for production lines that simulates 3 industrial machines (MX-01, MX-02, MX-03) sending real-time data about temperature, vibration, production, and fault status.
+
+The system integrates:
+- IoT simulation with Node-RED
+- REST API with JWT authentication
+- GraphQL API with real-time subscriptions
+- PostgreSQL database with automatic triggers
+- Interactive dashboard with controls and visualizations
+
+---
+
+## Technologies Used
 
 ### Backend
 - **Python 3.13.7**
-- **FastAPI 0.115.0** - Framework web asíncrono
-- **SQLAlchemy 2.0.36** - ORM para base de datos
-- **Strawberry GraphQL 0.243.0** - API GraphQL
-- **Python-Jose** - Autenticación JWT
-- **Passlib + Bcrypt** - Hash de contraseñas
+- **FastAPI 0.115.0** - Asynchronous web framework
+- **SQLAlchemy 2.0.36** - Database ORM
+- **Strawberry GraphQL 0.243.0** - GraphQL API
+- **Python-Jose 3.3.0** - JWT authentication
+- **Passlib + Bcrypt** - Password hashing
 
-### Base de Datos
-- **PostgreSQL 16** (Docker)
-- **psycopg 3.2.3** - Driver PostgreSQL
+### Database
+- **PostgreSQL 15** (Docker)
+- **psycopg 3.2.3** - PostgreSQL driver
 
-### Simulación y Visualización
-- **Node-RED 4.1.1** - Simulador IoT y orquestador
-- **Node-RED Dashboard 3.6.6** - Interfaz de usuario
+### Simulation and Visualization
+- **Node.js 22.20.0**
+- **Node-RED** - IoT simulator and orchestrator
+- **Node-RED Dashboard** - User interface
 
-### Infraestructura
-- **Docker Compose** - Contenedorización de PostgreSQL
-- **Uvicorn** - Servidor ASGI
+### Infrastructure
+- **Docker** - PostgreSQL containerization
+- **Uvicorn 0.32.0** - ASGI server
 
 ---
 
-## Estructura del Proyecto
+## Project Structure
 ```
-SIS4415_FinalProject_AnibalFalcon/
-├── api/                          # Backend FastAPI
-│   ├── models/                   # Modelos SQLAlchemy
-│   ├── schemas/                  # Schemas Pydantic
-│   ├── routes/                   # Endpoints REST
-│   ├── graphql/                  # Schema y resolvers GraphQL
-│   ├── utils/                    # Utilidades (JWT, dependencies)
-│   ├── config.py                 # Configuración
-│   ├── database.py               # Conexión a BD
-│   └── main.py                   # Aplicación principal
-├── flows/                        # Flows de Node-RED
-│   ├── smart_production_flow.json
-│   └── complete_integrated_flow.json
-├── screenshots/                  # Capturas de pantalla
-├── Docker-4taRev/               # Configuración Docker
+Final_Project/
+├── Docker-4taRev/                   # Docker configuration
 │   ├── docker-compose.yml
 │   ├── .env
-│   └── postgres/init.sql
-├── venv/                        # Entorno virtual Python
-├── .env                         # Variables de entorno
-├── .gitignore
-├── requirements.txt             # Dependencias Python
-├── graphql_queries.md          # Queries de ejemplo
-├── README.md                   # Este archivo
-└── architecture.md             # Documentación de arquitectura
+│   └── postgres/
+│       └── init.sql                 # Database initialization script
+│
+└── SIS4415_FinalProject_AnibalFalcon/
+    ├── api/                         # FastAPI backend
+    │   ├── models/                  # SQLAlchemy models
+    │   │   ├── __init__.py
+    │   │   ├── user.py
+    │   │   └── machine.py
+    │   ├── schemas/                 # Pydantic schemas
+    │   │   ├── __init__.py
+    │   │   ├── user.py
+    │   │   └── machine.py
+    │   ├── routes/                  # REST endpoints
+    │   │   ├── __init__.py
+    │   │   ├── auth.py
+    │   │   ├── machines.py
+    │   │   └── alerts.py
+    │   ├── graphql/                 # GraphQL schema and resolvers
+    │   │   ├── __init__.py
+    │   │   ├── schema.py
+    │   │   ├── types.py
+    │   │   └── resolvers.py
+    │   ├── utils/                   # Utilities (JWT, dependencies)
+    │   │   ├── __init__.py
+    │   │   ├── security.py
+    │   │   └── dependencies.py
+    │   ├── config.py                # Configuration
+    │   ├── database.py              # Database connection
+    │   └── main.py                  # Main application
+    ├── flows/                       # Node-RED flows
+    │   └── complete_integrated_flow.json
+    ├── screenshots/                 # System screenshots
+    │   ├── 01_login_tab.png
+    │   ├── 02_overview_tab.png
+    │   ├── 03_live_metrics_tab.png
+    │   ├── 04_alerts_tab.png
+    │   ├── 05_reports_tab.png
+    │   ├── 06_swagger_ui.png
+    │   └── 07_graphql_playground.png
+    ├── venv/                        # Python virtual environment
+    ├── .env                         # Environment variables
+    ├── .gitignore
+    ├── requirements.txt             # Python dependencies
+    ├── graphql_queries.md          # GraphQL query examples
+    ├── architecture.md             # Architecture documentation
+    └── README.md                   # This file
 ```
 
 ---
 
-## Instalación y Configuración
+## Installation and Setup
 
-### Prerrequisitos
+### Prerequisites
 
-- Python 3.9 o superior
-- Node.js 14 o superior
-- Docker y Docker Compose
+- Python 3.13 or higher
+- Node.js 22.20 or higher
+- Docker and Docker Compose
 - Git
 
-### 1. Clonar el repositorio
+### Step 1: Clone the Repository
 ```bash
 git clone https://github.com/Falcon4s/Project_Smart-Production-Line-Monitor-.git
-cd SIS4415_FinalProject_AnibalFalcon
+cd Final_Project
 ```
 
-### 2. Configurar Base de Datos (Docker)
+### Step 2: Configure Database (Docker)
 ```bash
 cd Docker-4taRev
 docker-compose up -d
 cd ..
 ```
 
-Verificar que PostgreSQL esté corriendo:
+Verify PostgreSQL is running:
 ```bash
 docker ps
 ```
 
-### 3. Configurar Backend (FastAPI)
+You should see a container named `postgres-sis4415` running.
 
-Crear entorno virtual:
+### Step 3: Configure Backend (FastAPI)
+
+Navigate to the project folder:
+```bash
+cd SIS4415_FinalProject_AnibalFalcon
+```
+
+Create virtual environment:
 ```bash
 python -m venv venv
 ```
 
-Activar entorno virtual:
+Activate virtual environment:
 - **Windows:** `venv\Scripts\activate`
 - **Mac/Linux:** `source venv/bin/activate`
 
-Instalar dependencias:
+Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configurar Variables de Entorno
+### Step 4: Configure Environment Variables
 
-El archivo `.env` ya está configurado con:
+The `.env` file is already configured with default values:
 ```env
 DATABASE_URL=postgresql+psycopg://sis4415_user:production2025@localhost:5432/smart_production
 SECRET_KEY=sis4415-smart-production-secret-key-change-in-production-2025
@@ -134,52 +168,72 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-### 5. Instalar Node-RED
+### Step 5: Install Node-RED
 ```bash
 npm install -g node-red
-npm install -g node-red-dashboard
+```
+
+Install dashboard nodes (in Node-RED user directory):
+```bash
+cd ~/.node-red
+npm install node-red-dashboard
 ```
 
 ---
 
-## Ejecución del Sistema
+## Running the System
 
-### Terminal 1: Iniciar FastAPI
+### Terminal 1: Start FastAPI
 ```bash
-cd SIS4415_FinalProject_AnibalFalcon
-venv\Scripts\activate
+cd Final_Project/SIS4415_FinalProject_AnibalFalcon
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Mac/Linux
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Terminal 2: Iniciar Node-RED
+Expected output:
+```
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Application startup complete.
+```
+
+### Terminal 2: Start Node-RED
 ```bash
 node-red
 ```
 
-Luego importar el flow:
-1. Abrir http://localhost:1880
-2. Menú > Import
-3. Seleccionar `flows/complete_integrated_flow.json`
-4. Deploy
+Expected output:
+```
+[info] Server now running at http://127.0.0.1:1880/
+```
+
+### Step 3: Import Node-RED Flow
+
+1. Open http://localhost:1880 in your browser
+2. Click menu (top right) > Import
+3. Select file: `Final_Project/SIS4415_FinalProject_AnibalFalcon/flows/complete_integrated_flow.json`
+4. Click Import
+5. Click Deploy (red button, top right)
 
 ---
 
-## Acceso a las Interfaces
+## Accessing the Interfaces
 
-- **REST API (Swagger):** http://localhost:8000/docs
+- **REST API (Swagger UI):** http://localhost:8000/docs
+- **REST API (ReDoc):** http://localhost:8000/redoc
 - **GraphQL Playground:** http://localhost:8000/graphql
 - **Node-RED Editor:** http://localhost:1880
-- **Dashboard de Producción:** http://localhost:1880/ui
+- **Production Dashboard:** http://localhost:1880/ui
 
 ---
 
-## Credenciales de Prueba
+## Default Credentials
 
-### Usuario Default
+### Dashboard User
 - **Username:** `admin`
 - **Password:** `admin123`
 
-### Base de Datos
+### Database Access
 - **Host:** localhost
 - **Port:** 5432
 - **Database:** smart_production
@@ -188,92 +242,152 @@ Luego importar el flow:
 
 ---
 
-## Uso del Sistema
+## System Usage
 
-### 1. Dashboard de Node-RED
+### 1. Node-RED Dashboard
 
-Acceder a http://localhost:1880/ui
+Access: http://localhost:1880/ui
 
-**Controles disponibles:**
-- **Production Line:** Iniciar/detener simulación
-- **Update Frequency:** Ajustar intervalo de envío (1-10 segundos)
-- **Force Fault Mode:** Inyectar anomalías en los datos
+**Tab 1: Login**
+- Enter credentials to authenticate
+- JWT token stored automatically
 
-**Visualizaciones:**
-- Gauges de temperatura y vibración para cada máquina
-- Gráfica de producción en tiempo real
-- Estadísticas del sistema
+**Tab 2: Overview**
+- System KPIs (throughput, faults, temperature)
+- Machine status table with real-time updates
 
-### 2. API REST
+**Tab 3: Live Metrics**
+- System controls (Start/Stop, Frequency, Fault Mode)
+- Real-time gauges for all machines
+- Production chart with live data
 
-Acceder a http://localhost:8000/docs
+**Tab 4: Alerts**
+- Active alerts table
+- Clear all alerts button
+- Auto-refresh every 10 seconds
 
-**Endpoints principales:**
-- `GET /api/health` - Health check
-- `POST /api/auth/register` - Registro de usuarios
-- `POST /api/auth/login` - Login (obtener JWT)
-- `GET /api/machines` - Listar máquinas (requiere JWT)
-- `GET /api/machines/status` - Estado actual (requiere JWT)
-- `POST /api/machines/data` - Recibir datos de Node-RED
+**Tab 5: Reports**
+- Time window selector (5, 15, 60 minutes)
+- Generate statistics report
+- Export data to CSV
 
-### 3. API GraphQL
+**Available Controls:**
+- **Production Line:** Start/stop simulation
+- **Update Frequency:** Adjust send interval (1-10 seconds)
+- **Force Fault Mode:** Inject anomalies in data
 
-Acceder a http://localhost:8000/graphql
+### 2. REST API
 
-Ver `graphql_queries.md` para queries de ejemplo.
+Access: http://localhost:8000/docs
 
-**Queries principales:**
-- `GetSystemOverview` - Vista completa del sistema
-- `GetRecentMeasurements` - Historial de mediciones
+**Authentication Endpoints:**
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login (obtain JWT token)
+- `GET /api/auth/me` - Get current user info (requires JWT)
+
+**Machine Endpoints:**
+- `POST /api/machines/data` - Receive telemetry from simulator (public)
+- `GET /api/machines` - List all machines (requires JWT)
+- `GET /api/machines/status` - Current status of all machines (requires JWT)
+- `GET /api/machines/{machine_id}/measurements` - Measurement history (requires JWT)
+- `GET /api/machines/stats` - Aggregated statistics (requires JWT)
+- `GET /api/machines/export/csv` - Export measurements as CSV (requires JWT)
+
+**Alert Endpoints:**
+- `GET /api/alerts` - List alerts with filters (requires JWT)
+- `PATCH /api/alerts/clear` - Clear all unresolved alerts (requires JWT)
+- `PATCH /api/alerts/{alert_id}/resolve` - Resolve specific alert (requires JWT)
+
+**Health Check:**
+- `GET /api/health` - System health status (public)
+
+### 3. GraphQL API
+
+Access: http://localhost:8000/graphql
+
+Refer to `graphql_queries.md` for example queries.
+
+**Main Queries:**
+- `machines` - Get all machines
+- `measurements` - Get measurement history
+- `machineStatus` - Get current machine status
+- `allMachineStatuses` - Get all machine statuses
+
+**Mutations:**
+- `createMachine` - Register new machine
+- `addMeasurement` - Add new measurement
 
 **Subscriptions:**
-- `LiveMachineData` - Datos en tiempo real (actualiza cada 2 seg)
+- `machineUpdates` - Real-time machine updates (updates every 2 seconds)
 
 ---
 
-## Flujo de Datos
+## Data Flow
 ```
 Node-RED Simulator
-       ↓
-  (HTTP POST every 2s)
-       ↓
-REST API (/api/machines/data)
-       ↓
+       |
+       v (HTTP POST every 2 seconds)
+       |
+FastAPI REST API (/api/machines/data)
+       |
+       v (Insert + Trigger execution)
+       |
 PostgreSQL Database
-       ↓
-GraphQL API (queries/subscriptions)
-       ↓
+       |
+       v (Automatic alert generation via triggers)
+       |
+REST & GraphQL APIs
+       |
+       v (Query + Subscribe)
+       |
 Dashboard / Clients
 ```
 
 ---
 
-## Características Implementadas
+## Implemented Features
 
-- Simulación de 3 máquinas con datos realistas
-- Inyección de anomalías para testing
-- Autenticación JWT para endpoints protegidos
-- API REST completa con documentación automática
-- API GraphQL con queries y subscriptions
-- Dashboard interactivo en tiempo real
-- Base de datos relacional con PostgreSQL
-- Sistema de alertas automático (triggers en BD)
-- Vistas SQL para reportes
-- Controles de frecuencia y estado
+**Backend:**
+- JWT-based authentication with password hashing
+- REST API with automatic OpenAPI documentation
+- GraphQL API with queries, mutations, and subscriptions
+- PostgreSQL database with automatic triggers for alerts
+- SQL views for reporting
+- CSV export functionality
+
+**Frontend:**
+- 5-tab interactive dashboard (Login, Overview, Live Metrics, Alerts, Reports)
+- Real-time data visualization with charts and gauges
+- System controls protected by authentication
+- Alert management system
+
+**Simulation:**
+- 3 industrial machines (MX-01, MX-02, MX-03)
+- Realistic data generation (temperature, vibration, production)
+- Configurable update frequency (1-10 seconds)
+- Fault injection mode for testing
+- Automatic data transmission to backend
+
+**Database:**
+- Automatic alert generation via triggers
+- Temperature threshold: > 90°C (critical)
+- Vibration threshold: > 80 (high)
+- Fault detection: immediate critical alert
+- Time-series data storage with indexing
 
 ---
 
-## Detener el Sistema
+## Stopping the System
 
-### Detener FastAPI
-En la terminal de FastAPI: `Ctrl+C`
+### Stop FastAPI
+In the FastAPI terminal: `Ctrl+C`
 
-### Detener Node-RED
-En la terminal de Node-RED: `Ctrl+C`
+### Stop Node-RED
+In the Node-RED terminal: `Ctrl+C`
 
-### Detener Docker
+### Stop Docker
 ```bash
-cd Docker-4taRev
+cd Final_Project/Docker-4taRev
 docker-compose down
 ```
 
@@ -281,30 +395,76 @@ docker-compose down
 
 ## Troubleshooting
 
-### Error de conexión a base de datos
-Verificar que Docker esté corriendo:
+### Database Connection Error
+Verify Docker container is running:
 ```bash
 docker ps
 ```
 
-### Error de módulos Python
-Asegurarse de tener el entorno virtual activado:
+If not running, start it:
 ```bash
-venv\Scripts\activate
+cd Final_Project/Docker-4taRev
+docker-compose up -d
+```
+
+### Python Module Errors
+Ensure virtual environment is activated:
+```bash
+cd Final_Project/SIS4415_FinalProject_AnibalFalcon
+venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
-### Node-RED no muestra el dashboard
-Verificar que node-red-dashboard esté instalado:
+### Node-RED Dashboard Not Showing
+Verify node-red-dashboard is installed:
 ```bash
-npm list -g node-red-dashboard
+cd ~/.node-red
+npm list node-red-dashboard
 ```
+
+If not installed:
+```bash
+npm install node-red-dashboard
+```
+
+### Port Already in Use
+If port 8000 or 1880 is already in use, change the port:
+
+**For FastAPI:**
+```bash
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8001
+```
+
+**For Node-RED:**
+Edit `~/.node-red/settings.js` and change `uiPort: 1880` to another port.
+
+### Overview Tab Shows No Data
+1. Verify you are logged in (check Login tab)
+2. Verify simulator is running (Production Line toggle ON in Live Metrics)
+3. Wait 5-10 seconds for data refresh
+4. Check browser console (F12) for errors
 
 ---
 
-## Autor
+## Additional Documentation
+
+- **Architecture:** See `architecture.md` for complete system architecture documentation
+- **GraphQL Queries:** See `graphql_queries.md` for query examples
+- **Screenshots:** See `screenshots/` folder for system interface captures
+
+---
+
+## Author
 
 **Anibal Simeon Falcon Castro**  
 Universidad Anáhuac Mayab  
-SIS4415 - Informática en la Cuarta Revolución Industrial  
-Noviembre 2025
+SIS4415 - Information Technology in the Fourth Industrial Revolution  
+November 2025
+
+---
+
+## Acknowledgments
+
+- Professor: Francisco Sosa Herrera
+- Course: SIS4415 - Information Technology in the Fourth Industrial Revolution
+- Institution: Universidad Anáhuac Mayab

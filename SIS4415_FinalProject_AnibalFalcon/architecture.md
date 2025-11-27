@@ -1,261 +1,984 @@
-# System Architecture Documentation
-# Smart Production Line Monitor - SIS4415 Final Project
+# Smart Production Line Monitoring System - Architecture Documentation
 
-**Author:** Anibal Simeon Falcon Castro
-**Course:** SIS4415 - Informática en la Cuarta Revolución Industrial
-**Date:** November 2025
-**Version:** 1.0.0
+## 1. SYSTEM OVERVIEW
 
----
+### Project Purpose
 
-## Table of Contents
+The Smart Production Line Monitoring System is an Industry 4.0 IoT solution designed to monitor and analyze real-time telemetry data from industrial manufacturing equipment. This system demonstrates the practical application of modern IoT architecture patterns, including real-time data acquisition, cloud-native backend services, and interactive visualization dashboards.
 
-1. [System Architecture Overview](#1-system-architecture-overview)
-2. [Database Schema](#2-database-schema)
-3. [REST API Endpoints](#3-rest-api-endpoints)
-4. [GraphQL API Schema](#4-graphql-api-schema)
-5. [End-to-End Data Flow](#5-end-to-end-data-flow)
-6. [Security Architecture](#6-security-architecture)
-7. [AWS Deployment Architecture](#7-aws-deployment-architecture)
-8. [Cost Estimation](#8-cost-estimation)
-9. [Scalability Strategy](#9-scalability-strategy)
-10. [Monitoring and Observability](#10-monitoring-and-observability)
+### Industry 4.0 Context
 
----
+Industry 4.0 represents the fourth industrial revolution, characterized by the integration of cyber-physical systems, IoT, cloud computing, and cognitive computing in manufacturing environments. This project embodies these principles by:
 
-## 1. System Architecture Overview
+- Collecting real-time telemetry from industrial machines
+- Providing data-driven insights for predictive maintenance
+- Enabling remote monitoring and control capabilities
+- Implementing automated alerting for anomalous conditions
+- Supporting historical data analysis and reporting
 
-### 1.1 High-Level Architecture Diagram
+### Main Objectives
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           PRESENTATION LAYER                             │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│  ┌──────────────────────┐        ┌──────────────────────┐               │
-│  │   Node-RED Dashboard │        │   External Clients   │               │
-│  │   (localhost:1880/ui)│        │   (Mobile/Web Apps)  │               │
-│  │                      │        │                      │               │
-│  │  • Control Panel     │        │  • REST API Clients  │               │
-│  │  • Live Monitoring   │        │  • GraphQL Clients   │               │
-│  │  • Real-time Charts  │        │  • WebSocket Clients │               │
-│  └──────────┬───────────┘        └──────────┬───────────┘               │
-│             │                               │                           │
-└─────────────┼───────────────────────────────┼───────────────────────────┘
-              │                               │
-              │      HTTP/WebSocket           │
-              │                               │
-┌─────────────┼───────────────────────────────┼───────────────────────────┐
-│             │         APPLICATION LAYER     │                           │
-├─────────────┼───────────────────────────────┼───────────────────────────┤
-│             ▼                               ▼                           │
-│  ┌─────────────────────────────────────────────────────────┐            │
-│  │              FastAPI Server (Port 8000)                  │            │
-│  │              Python 3.13 + Uvicorn ASGI                  │            │
-│  ├──────────────────────────────────────────────────────────┤            │
-│  │                                                           │            │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │            │
-│  │  │   REST API   │  │  GraphQL API │  │   WebSocket   │  │            │
-│  │  │   /api/v1    │  │   /graphql   │  │  Subscriptions│  │            │
-│  │  │              │  │              │  │               │  │            │
-│  │  │ • Health     │  │ • Queries    │  │ • Live Data   │  │            │
-│  │  │ • Auth (JWT) │  │ • Mutations  │  │ • Real-time   │  │            │
-│  │  │ • Machines   │  │ • Subscrip.  │  │   Updates     │  │            │
-│  │  └──────┬───────┘  └──────┬───────┘  └───────┬───────┘  │            │
-│  │         │                 │                  │           │            │
-│  │         └─────────────────┼──────────────────┘           │            │
-│  │                           │                              │            │
-│  │  ┌────────────────────────┴───────────────────────────┐  │            │
-│  │  │         Business Logic Layer                       │  │            │
-│  │  │  • SQLAlchemy ORM                                  │  │            │
-│  │  │  • Pydantic Schemas                                │  │            │
-│  │  │  • JWT Authentication                              │  │            │
-│  │  │  • Password Hashing (bcrypt)                       │  │            │
-│  │  └────────────────────────┬───────────────────────────┘  │            │
-│  └──────────────────────────┼────────────────────────────────┘            │
-│                             │                                             │
-└─────────────────────────────┼─────────────────────────────────────────────┘
-                              │ psycopg (PostgreSQL Driver)
-                              │
-┌─────────────────────────────┼─────────────────────────────────────────────┐
-│                             │      DATA LAYER                             │
-├─────────────────────────────┼─────────────────────────────────────────────┤
-│                             ▼                                             │
-│  ┌───────────────────────────────────────────────────────────┐            │
-│  │        PostgreSQL 16 Database (Port 5432)                 │            │
-│  ├───────────────────────────────────────────────────────────┤            │
-│  │                                                            │            │
-│  │  ┌──────────┐  ┌─────────────┐  ┌──────────────────┐     │            │
-│  │  │  Tables  │  │   Indexes   │  │  Views & Funcs   │     │            │
-│  │  │          │  │             │  │                  │     │            │
-│  │  │ • users  │  │ • machine   │  │ • machine_stats  │     │            │
-│  │  │ • mach's │  │   timestamp │  │   _24h           │     │            │
-│  │  │ • measur │  │ • alerts    │  │ • active_alerts  │     │            │
-│  │  │ • status │  │   unresolved│  │ • system_overview│     │            │
-│  │  │ • alerts │  │             │  │ • auto_alerts    │     │            │
-│  │  └──────────┘  └─────────────┘  └──────────────────┘     │            │
-│  │                                                            │            │
-│  └────────────────────────────────────────────────────────────┘            │
-│                             ▲                                             │
-└─────────────────────────────┼─────────────────────────────────────────────┘
-                              │ HTTP POST (every 2 seconds)
-                              │
-┌─────────────────────────────┼─────────────────────────────────────────────┐
-│                    IOT SIMULATION LAYER                                   │
-├─────────────────────────────┼─────────────────────────────────────────────┤
-│                             │                                             │
-│  ┌──────────────────────────┴──────────────────────────────┐              │
-│  │           Node-RED Flow Engine (Port 1880)              │              │
-│  ├─────────────────────────────────────────────────────────┤              │
-│  │                                                          │              │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐        │              │
-│  │  │  Machine   │  │  Machine   │  │  Machine   │        │              │
-│  │  │   MX-01    │  │   MX-02    │  │   MX-03    │        │              │
-│  │  │            │  │            │  │            │        │              │
-│  │  │ Assembly   │  │  Welding   │  │  Quality   │        │              │
-│  │  │   Line     │  │  Station   │  │  Control   │        │              │
-│  │  │   Alpha    │  │   Beta     │  │  Gamma     │        │              │
-│  │  │            │  │            │  │            │        │              │
-│  │  │ Temp: 60-90│  │ Temp: 65-95│  │ Temp: 55-85│        │              │
-│  │  │ Vib: 10-40 │  │ Vib: 15-45 │  │ Vib: 10-35 │        │              │
-│  │  │ Prod: 0-10 │  │ Prod: 0-8  │  │ Prod: 0-12 │        │              │
-│  │  └────────────┘  └────────────┘  └────────────┘        │              │
-│  │         │               │               │               │              │
-│  │         └───────────────┴───────────────┘               │              │
-│  │                         │                               │              │
-│  │           ┌─────────────▼─────────────┐                 │              │
-│  │           │  Data Aggregator Node     │                 │              │
-│  │           │  • 2-second intervals     │                 │              │
-│  │           │  • JSON formatting        │                 │              │
-│  │           │  • Fault injection        │                 │              │
-│  │           └─────────────┬─────────────┘                 │              │
-│  │                         │                               │              │
-│  │           ┌─────────────▼─────────────┐                 │              │
-│  │           │  HTTP Request Node        │                 │              │
-│  │           │  POST /api/v1/machines/   │                 │              │
-│  │           │       data                │                 │              │
-│  │           └───────────────────────────┘                 │              │
-│  └──────────────────────────────────────────────────────────┘              │
-│                                                                            │
-└────────────────────────────────────────────────────────────────────────────┘
+1. **Real-Time Monitoring**: Collect and display live telemetry data from three industrial machines (MX-01, MX-02, MX-03) at 2-second intervals
+2. **Data Persistence**: Store all measurements in a PostgreSQL database for historical analysis
+3. **Alert Generation**: Automatically detect and report critical conditions (high temperature, excessive vibration, equipment faults)
+4. **API Access**: Provide both REST and GraphQL APIs for flexible data consumption
+5. **User Authentication**: Implement secure JWT-based authentication for protected resources
+6. **Data Visualization**: Deliver an intuitive Node-RED dashboard with real-time gauges, charts, and KPIs
+7. **Reporting Capabilities**: Enable statistical analysis and CSV export functionality
+
+## 2. ARCHITECTURE DIAGRAM
+
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        NR[Node-RED Dashboard<br/>Port: 1880]
+        SIM[IoT Simulator<br/>Data Generator]
+    end
+
+    subgraph "Backend Layer"
+        API[FastAPI Application<br/>Port: 8000]
+        REST[REST API Endpoints]
+        GQL[GraphQL API]
+        AUTH[JWT Authentication]
+    end
+
+    subgraph "Data Layer"
+        PG[(PostgreSQL Database<br/>Port: 5432)]
+        TABLES[Tables: users, machines,<br/>measurements, machine_status, alerts]
+        TRIG[Database Triggers<br/>Alert Generation]
+    end
+
+    SIM -->|POST /api/machines/data<br/>Every 2 seconds| REST
+    NR -->|Login Request| AUTH
+    AUTH -->|JWT Token| NR
+    NR -->|Authenticated Requests<br/>Bearer Token| REST
+    NR -->|GraphQL Queries| GQL
+    REST --> PG
+    GQL --> PG
+    PG --> TRIG
+    TRIG -->|Auto-create alerts| TABLES
+
+    style NR fill:#e1f5ff
+    style API fill:#fff4e1
+    style PG fill:#f0f0f0
 ```
 
-### 1.2 Technology Stack
+## 2.5 SYSTEM COMPONENT MAPPING
 
-| Layer | Technology | Version | Purpose |
-|-------|------------|---------|---------|
-| **Application** | FastAPI | 0.115.0 | Asynchronous web framework |
-| | Uvicorn | 0.32.0 | ASGI server |
-| | Python | 3.13.7 | Runtime environment |
-| **API** | Strawberry GraphQL | 0.243.0 | GraphQL implementation |
-| | Pydantic | 2.10.0 | Data validation |
-| **Security** | Python-Jose | 3.3.0 | JWT token handling |
-| | Passlib + Bcrypt | 1.7.4 | Password hashing |
-| **Database** | PostgreSQL | 16 | Relational database |
-| | SQLAlchemy | 2.0.36 | ORM |
-| | psycopg | 3.2.3 | PostgreSQL driver |
-| **IoT Simulation** | Node-RED | 4.1.1 | Flow orchestrator |
-| | Node-RED Dashboard | 3.6.6 | UI components |
-| **Infrastructure** | Docker Compose | - | Container orchestration |
+```mermaid
+graph TB
+    subgraph "Physical Host Machine"
+        subgraph "Docker Container: PostgreSQL"
+            PGDB[(PostgreSQL 15<br/>Container Name: postgres-sis4415<br/>Port Mapping: 5432:5432)]
+            VOL[/Volume Mount:<br/>./postgres/init.sql]
+        end
 
-### 1.3 System Components
+        subgraph "Node.js Runtime"
+            NRED[Node-RED Server<br/>Port: 1880<br/>Flow Storage: flows/]
+            DASH[Dashboard UI<br/>HTTP Endpoint]
+            FLOW[Flow Execution Engine]
+        end
 
-#### Application Server (FastAPI)
-- **Port:** 8000
-- **Protocol:** HTTP/WebSocket
-- **Concurrency Model:** Async/Await with Uvicorn ASGI
-- **Features:**
-  - Auto-generated OpenAPI documentation
-  - CORS middleware for cross-origin requests
-  - JWT-based authentication
-  - WebSocket support for real-time subscriptions
+        subgraph "Python Runtime"
+            FAPI[FastAPI Server<br/>Uvicorn ASGI<br/>Port: 8000]
+            SQLA[SQLAlchemy ORM]
+            BERRY[Strawberry GraphQL]
+        end
+    end
 
-#### Database (PostgreSQL)
-- **Port:** 5432
-- **Connection Pool:** SQLAlchemy engine with connection pooling
-- **Features:**
-  - ACID compliance
-  - Triggers for automatic alert generation
-  - Indexed queries for performance
-  - Views for aggregated reporting
+    FLOW -->|TCP 8000| FAPI
+    FAPI -->|TCP 5432<br/>Connection Pool| PGDB
+    DASH -->|HTTP/WebSocket| NRED
+    NRED -->|HTTP Client| FAPI
+    VOL -.->|Initialize Schema| PGDB
 
-#### IoT Simulator (Node-RED)
-- **Port:** 1880 (editor), 1880/ui (dashboard)
-- **Simulation Rate:** 2 seconds per machine (configurable 1-10s)
-- **Features:**
-  - 3 independent machine simulators
-  - Realistic sensor value generation
-  - Fault injection capability
-  - Interactive dashboard controls
-
----
-
-## 2. Database Schema
-
-### 2.1 Entity-Relationship Diagram
-
-```
-┌──────────────────────┐
-│       users          │
-├──────────────────────┤
-│ PK id (SERIAL)       │
-│ UK username (VARCHAR)│
-│ UK email (VARCHAR)   │
-│    password_hash     │
-│    created_at        │
-└──────────────────────┘
-
-┌──────────────────────┐         1:N         ┌──────────────────────┐
-│     machines         │◄────────────────────┤   measurements       │
-├──────────────────────┤                     ├──────────────────────┤
-│ PK id (SERIAL)       │                     │ PK id (SERIAL)       │
-│ UK machine_id(VARCH) │                     │ FK machine_id(VARCH) │
-│    name (VARCHAR)    │                     │    temperature(DEC)  │
-│    location(VARCHAR) │                     │    vibration (INT)   │
-│    status (VARCHAR)  │                     │    production_count  │
-│    created_at(TIME)  │                     │    fault (BOOLEAN)   │
-└──────────┬───────────┘                     │    timestamp (TIME)  │
-           │                                 │    created_at (TIME) │
-           │                                 └──────────────────────┘
-           │                                 IDX: (machine_id, timestamp DESC)
-           │
-           │ 1:1
-           ├────────────────────►┌──────────────────────┐
-           │                     │   machine_status     │
-           │                     ├──────────────────────┤
-           │                     │ PK FK machine_id     │
-           │                     │    temperature (DEC) │
-           │                     │    vibration (INT)   │
-           │                     │    production_count  │
-           │                     │    fault (BOOLEAN)   │
-           │                     │    last_updated(TIME)│
-           │                     └──────────────────────┘
-           │
-           │ 1:N
-           └────────────────────►┌──────────────────────┐
-                                 │       alerts         │
-                                 ├──────────────────────┤
-                                 │ PK id (SERIAL)       │
-                                 │ FK machine_id(VARCH) │
-                                 │    alert_type(VARCH) │
-                                 │    severity (VARCH)  │
-                                 │    message (TEXT)    │
-                                 │    resolved (BOOL)   │
-                                 │    created_at (TIME) │
-                                 │    resolved_at(TIME) │
-                                 └──────────────────────┘
-                                 IDX: (resolved, created_at DESC)
-                                      WHERE resolved = FALSE
+    style PGDB fill:#336791,color:#fff
+    style NRED fill:#8f0000,color:#fff
+    style FAPI fill:#009688,color:#fff
 ```
 
-### 2.2 Complete SQL Schema
+### Network Communication Patterns
 
-#### Core Tables
+| Source | Destination | Protocol | Port | Purpose |
+|--------|------------|----------|------|---------|
+| Node-RED Simulator | FastAPI | HTTP/JSON | 8000 | POST telemetry data |
+| Node-RED Dashboard | FastAPI | HTTP/JSON | 8000 | REST API queries |
+| Node-RED Dashboard | FastAPI | HTTP/JSON | 8000 | GraphQL queries |
+| FastAPI | PostgreSQL | PostgreSQL Wire Protocol | 5432 | Database operations |
+| User Browser | Node-RED | HTTP/WebSocket | 1880 | Dashboard access |
+
+### Data Persistence Layers
+
+1. **Database Persistence**: PostgreSQL with ACID compliance
+2. **Flow Configuration**: Node-RED flows stored as JSON files
+3. **Authentication State**: JWT tokens stored in Node-RED flow context variables
+4. **Connection Pooling**: SQLAlchemy connection pool (size: 10, max overflow: 20)
+
+## 3. COMPONENT DESCRIPTIONS
+
+### 3.1 Database Layer (PostgreSQL)
+
+The database layer consists of five primary tables and supporting infrastructure including indexes, views, triggers, and functions.
+
+#### Table Relationships
+
+```mermaid
+erDiagram
+    users ||--o{ "protected_endpoints" : authenticates
+    machines ||--o{ measurements : generates
+    machines ||--|| machine_status : has_current
+    machines ||--o{ alerts : triggers
+
+    users {
+        serial id PK
+        varchar username UK
+        varchar email UK
+        varchar password_hash
+        timestamp created_at
+    }
+
+    machines {
+        serial id PK
+        varchar machine_id UK
+        varchar name
+        varchar location
+        varchar status
+        timestamp created_at
+    }
+
+    measurements {
+        serial id PK
+        varchar machine_id FK
+        decimal temperature
+        integer vibration
+        integer production_count
+        boolean fault
+        timestamp timestamp
+        timestamp created_at
+    }
+
+    machine_status {
+        varchar machine_id PK_FK
+        decimal temperature
+        integer vibration
+        integer production_count
+        boolean fault
+        timestamp last_updated
+    }
+
+    alerts {
+        serial id PK
+        varchar machine_id FK
+        varchar alert_type
+        varchar severity
+        text message
+        boolean resolved
+        timestamp created_at
+        timestamp resolved_at
+    }
+```
+
+#### Database Triggers
+
+The system implements an automated alert generation mechanism using PostgreSQL triggers:
+
+**Trigger: `trigger_alert_on_measurement`**
+- **Event**: AFTER INSERT ON measurements
+- **Purpose**: Automatically evaluate new measurements against safety thresholds
+- **Logic**:
+  - Temperature > 90°C: Create CRITICAL alert (type: high_temperature)
+  - Vibration > 80: Create HIGH alert (type: high_vibration)
+  - Fault = TRUE: Create CRITICAL alert (type: machine_fault)
+
+This approach decouples alert logic from application code, ensuring consistent alert generation regardless of data source.
+
+#### Complete Table Schemas
+
+```sql
+-- Users Table (Authentication)
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Machines Table (Equipment Catalog)
+CREATE TABLE machines (
+    id SERIAL PRIMARY KEY,
+    machine_id VARCHAR(20) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    location VARCHAR(100),
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Measurements Table (Time-Series Telemetry)
+CREATE TABLE measurements (
+    id SERIAL PRIMARY KEY,
+    machine_id VARCHAR(20) REFERENCES machines(machine_id) ON DELETE CASCADE,
+    temperature DECIMAL(5,2),
+    vibration INTEGER,
+    production_count INTEGER,
+    fault BOOLEAN DEFAULT FALSE,
+    timestamp TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for efficient time-series queries
+CREATE INDEX idx_measurements_machine_timestamp
+ON measurements(machine_id, timestamp DESC);
+
+-- Machine Status Table (Current State Snapshot)
+CREATE TABLE machine_status (
+    machine_id VARCHAR(20) PRIMARY KEY REFERENCES machines(machine_id) ON DELETE CASCADE,
+    temperature DECIMAL(5,2),
+    vibration INTEGER,
+    production_count INTEGER,
+    fault BOOLEAN DEFAULT FALSE,
+    last_updated TIMESTAMP NOT NULL
+);
+
+-- Alerts Table (Event Log)
+CREATE TABLE alerts (
+    id SERIAL PRIMARY KEY,
+    machine_id VARCHAR(20) REFERENCES machines(machine_id) ON DELETE CASCADE,
+    alert_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    message TEXT,
+    resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP
+);
+
+-- Index for unresolved alerts queries
+CREATE INDEX idx_alerts_unresolved
+ON alerts(resolved, created_at DESC) WHERE resolved = FALSE;
+```
+
+#### Database Views
+
+The system provides three materialized views for optimized reporting:
+
+1. **machine_stats_24h**: Aggregated statistics per machine for the last 24 hours
+2. **active_alerts**: Current unresolved alerts with priority ordering
+3. **system_overview**: System-wide KPIs and health metrics
+
+#### Trigger Function Implementation
+
+```sql
+CREATE OR REPLACE FUNCTION check_and_create_alert()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- High temperature threshold
+    IF NEW.temperature > 90 THEN
+        INSERT INTO alerts (machine_id, alert_type, severity, message)
+        VALUES (NEW.machine_id, 'high_temperature', 'critical',
+                'Temperature exceeded 90°C: ' || NEW.temperature || '°C');
+    END IF;
+
+    -- High vibration threshold
+    IF NEW.vibration > 80 THEN
+        INSERT INTO alerts (machine_id, alert_type, severity, message)
+        VALUES (NEW.machine_id, 'high_vibration', 'high',
+                'Vibration exceeded safe threshold: ' || NEW.vibration);
+    END IF;
+
+    -- Machine fault condition
+    IF NEW.fault = TRUE THEN
+        INSERT INTO alerts (machine_id, alert_type, severity, message)
+        VALUES (NEW.machine_id, 'machine_fault', 'critical',
+                'Machine reported a fault condition');
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_alert_on_measurement
+AFTER INSERT ON measurements
+FOR EACH ROW
+EXECUTE FUNCTION check_and_create_alert();
+```
+
+### 3.2 Backend Layer (FastAPI)
+
+The backend provides a dual API architecture with both REST and GraphQL interfaces, secured by JWT authentication.
+
+#### REST API Endpoints
+
+**Authentication Endpoints**
+
+| Method | Endpoint | Authentication | Description |
+|--------|----------|----------------|-------------|
+| POST | /api/auth/register | Public | Create new user account |
+| POST | /api/auth/login | Public | Authenticate and receive JWT token |
+| GET | /api/auth/me | Protected | Retrieve current user information |
+
+**Machine Data Endpoints**
+
+| Method | Endpoint | Authentication | Description |
+|--------|----------|----------------|-------------|
+| POST | /api/machines/data | Public | Receive telemetry from IoT simulator |
+| GET | /api/machines | Protected | List all machines |
+| GET | /api/machines/status | Protected | Get current status of all machines |
+| GET | /api/machines/{machine_id}/measurements | Protected | Get measurement history for specific machine |
+| GET | /api/machines/stats | Protected | Get aggregated statistics with time filtering |
+| GET | /api/machines/measurements | Protected | Get all measurements with time range |
+| GET | /api/machines/export/csv | Protected | Export measurements as CSV file |
+
+**Alert Endpoints**
+
+| Method | Endpoint | Authentication | Description |
+|--------|----------|----------------|-------------|
+| GET | /api/alerts | Protected | List alerts with optional filters |
+| PATCH | /api/alerts/clear | Protected | Mark all unresolved alerts as resolved |
+| PATCH | /api/alerts/{alert_id}/resolve | Protected | Resolve specific alert by ID |
+
+**Health Check**
+
+| Method | Endpoint | Authentication | Description |
+|--------|----------|----------------|-------------|
+| GET | /api/health | Public | System health status |
+
+#### GraphQL API
+
+The GraphQL endpoint is available at `/graphql` with an interactive GraphiQL interface.
+
+**Available Queries**
+
+```graphql
+type Query {
+  # Get all machines
+  machines: [MachineType!]!
+
+  # Get specific machine by ID
+  machine(machineId: String!): MachineType
+
+  # Get measurements with optional filtering
+  measurements(machineId: String, limit: Int = 100): [MeasurementType!]!
+
+  # Get current status of specific machine
+  machineStatus(machineId: String!): MachineStatusType
+
+  # Get current status of all machines
+  allMachineStatuses: [MachineStatusType!]!
+}
+```
+
+**Available Mutations**
+
+```graphql
+type Mutation {
+  # Create new machine
+  createMachine(machineInput: MachineInput!): MachineType!
+
+  # Add new measurement
+  addMeasurement(measurementInput: MeasurementInput!): MeasurementType!
+}
+```
+
+**Available Subscriptions**
+
+```graphql
+type Subscription {
+  # Subscribe to real-time machine updates
+  machineUpdates(machineId: String): MachineStatusType!
+}
+```
+
+**GraphQL Type Definitions**
+
+```graphql
+type MachineType {
+  id: Int!
+  machineId: String!
+  name: String!
+  location: String
+  status: String!
+  createdAt: DateTime!
+}
+
+type MeasurementType {
+  id: Int!
+  machineId: String!
+  temperature: Float
+  vibration: Int
+  productionCount: Int
+  fault: Boolean!
+  timestamp: DateTime!
+}
+
+type MachineStatusType {
+  machineId: String!
+  temperature: Float
+  vibration: Int
+  productionCount: Int
+  fault: Boolean!
+  lastUpdated: DateTime!
+}
+
+input MachineInput {
+  machineId: String!
+  name: String!
+  location: String
+  status: String = "active"
+}
+
+input MeasurementInput {
+  machineId: String!
+  temperature: Float
+  vibration: Int
+  productionCount: Int
+  fault: Boolean = false
+  timestamp: DateTime
+}
+```
+
+#### Authentication Mechanism (JWT)
+
+**Token Generation Process**:
+1. Client POSTs credentials to `/api/auth/login` using OAuth2 password flow
+2. Backend verifies username/password using bcrypt hashing
+3. On success, generates JWT token with 30-minute expiration
+4. Token payload contains: `{"sub": "username", "exp": <timestamp>}`
+5. Token signed using HS256 algorithm with secret key
+
+**Token Validation Process**:
+1. Client includes token in Authorization header: `Bearer <token>`
+2. Protected endpoints extract token using FastAPI's `Depends(get_current_user)`
+3. Token decoded and signature verified
+4. Username extracted from `sub` claim
+5. User object retrieved from database and attached to request context
+
+**Security Implementation**:
+- Password hashing: bcrypt with automatic salt generation
+- Token signing: python-jose with cryptography backend
+- Token expiration: 30 minutes (configurable via ACCESS_TOKEN_EXPIRE_MINUTES)
+- Protected routes: Dependency injection via `get_current_user` function
+
+### 3.3 Frontend Layer (Node-RED)
+
+Node-RED serves dual purposes: IoT simulator and dashboard interface.
+
+#### IoT Simulator
+
+The simulator generates synthetic telemetry data for three machines at configurable intervals.
+
+**Configuration Parameters**:
+- **Machines**: MX-01, MX-02, MX-03
+- **Generation Frequency**: 2000ms (2 seconds) per machine
+- **Temperature Range**: 60-95 degrees Celsius (with configurable spike mode)
+- **Vibration Range**: 15-85 (0-100 scale)
+- **Production Count**: 10-20 units per minute
+- **Fault Probability**: 5% random fault injection (configurable)
+
+**Data Generation Flow**:
+1. Inject node triggers every 2 seconds
+2. Function node generates random telemetry within defined ranges
+3. HTTP request node POSTs data to `/api/machines/data`
+4. Response logged for debugging
+
+**Sample Generated Payload**:
+```json
+{
+  "machine_id": "MX-01",
+  "temperature": 72.5,
+  "vibration": 28,
+  "production_count": 15,
+  "fault": false,
+  "timestamp": "2025-11-27T10:30:45.123Z"
+}
+```
+
+#### Dashboard UI
+
+The Node-RED dashboard consists of five primary tabs:
+
+**1. Login Tab**
+- Username and password input fields
+- Login button triggering authentication flow
+- Token storage in flow context variable
+- Error message display for failed authentication
+
+**2. Overview Tab**
+- System KPIs: Total machines, active machines, total production, active alerts
+- Machine status table with columns:
+  - Machine ID
+  - Temperature (with color coding)
+  - Vibration level
+  - Production count
+  - Fault status
+  - Last update timestamp
+- Auto-refresh every 5 seconds
+
+**3. Live Metrics Tab**
+- Three gauge widgets (one per machine) showing:
+  - Temperature gauge (0-100°C, red zone > 90°C)
+  - Vibration gauge (0-100, yellow zone > 60, red zone > 80)
+- Real-time line chart plotting temperature trends
+- Real-time bar chart showing production counts
+- Data refresh rate: 3 seconds
+
+**4. Alerts Tab**
+- Table displaying active alerts with columns:
+  - Alert ID
+  - Machine ID
+  - Alert type
+  - Severity (color-coded: critical=red, high=orange)
+  - Message
+  - Created timestamp
+- Clear All Alerts button
+- Individual alert resolution buttons
+- Alert count badge
+
+**5. Reports Tab**
+- Date range picker for statistical queries
+- Statistics display showing:
+  - Total production
+  - Average/Min/Max temperature
+  - Average/Min/Max vibration
+  - Fault count
+  - Total readings
+- CSV Export button
+- Download functionality for production reports
+
+## 4. DATA FLOW
+
+The following sequence describes end-to-end data flow through the system:
+
+### Step 1: Data Generation
+Node-RED inject node triggers every 2 seconds, executing a function that generates random telemetry values within operational ranges for a specific machine ID.
+
+### Step 2: Data Ingestion
+HTTP request node POSTs JSON payload to `POST /api/machines/data` endpoint. This endpoint is intentionally public to simulate real IoT devices without authentication overhead.
+
+### Step 3: Data Validation and Persistence
+FastAPI endpoint handler:
+1. Validates machine_id exists in machines table
+2. Creates new Measurement record
+3. Updates or creates MachineStatus record (current snapshot)
+4. Commits transaction to PostgreSQL
+5. Returns success confirmation
+
+### Step 4: Automated Alert Generation
+PostgreSQL trigger `trigger_alert_on_measurement` executes automatically:
+1. Evaluates new measurement against thresholds
+2. Inserts alert records if conditions met
+3. All within same transaction (atomic operation)
+
+### Step 5: Dashboard Query
+Node-RED dashboard periodically queries authenticated endpoints:
+- `GET /api/machines/status` for current state
+- `GET /api/alerts?resolved=false` for active alerts
+- `GET /api/machines/stats` for aggregated statistics
+
+### Step 6: Data Visualization
+Dashboard receives JSON responses and updates UI components:
+- Gauges display current values
+- Charts plot historical trends
+- Tables list detailed records
+- KPI cards show aggregated metrics
+
+### Step 7: User Interaction
+Users can:
+- Clear alerts via `PATCH /api/alerts/clear`
+- Generate reports via `GET /api/machines/stats`
+- Export data via `GET /api/machines/export/csv`
+
+### Data Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant SIM as IoT Simulator
+    participant API as FastAPI Backend
+    participant DB as PostgreSQL
+    participant TRIG as DB Trigger
+    participant DASH as Dashboard
+    participant USER as User
+
+    loop Every 2 seconds
+        SIM->>API: POST /api/machines/data
+        API->>DB: INSERT INTO measurements
+        API->>DB: UPSERT machine_status
+        DB->>TRIG: Trigger: check_and_create_alert()
+        TRIG->>DB: INSERT INTO alerts (if threshold exceeded)
+        DB-->>API: Transaction committed
+        API-->>SIM: 201 Success
+    end
+
+    USER->>DASH: Open dashboard
+    DASH->>API: POST /api/auth/login
+    API-->>DASH: JWT Token
+
+    loop Every 5 seconds
+        DASH->>API: GET /api/machines/status (with JWT)
+        API->>DB: SELECT FROM machine_status
+        DB-->>API: Current state
+        API-->>DASH: JSON Response
+        DASH->>DASH: Update gauges/charts
+    end
+
+    USER->>DASH: Click "Export CSV"
+    DASH->>API: GET /api/machines/export/csv (with JWT)
+    API->>DB: SELECT FROM measurements
+    DB-->>API: Historical data
+    API-->>DASH: CSV file stream
+    DASH-->>USER: Download file
+```
+
+## 5. SECURITY ARCHITECTURE
+
+### JWT Authentication Implementation
+
+**Token Structure**:
+```json
+{
+  "sub": "admin",
+  "exp": 1732705845
+}
+```
+
+**Token Lifecycle**:
+1. **Generation**: On successful login at `/api/auth/login`
+2. **Storage**: In Node-RED flow context (in-memory)
+3. **Transmission**: Via Authorization header: `Bearer eyJ0eXAiOiJKV1QiLCJhbGc...`
+4. **Validation**: On every protected endpoint request
+5. **Expiration**: 30 minutes from issuance
+
+### Protected vs Public Endpoints
+
+**Public Endpoints** (No Authentication Required):
+- `/api/auth/register` - User registration
+- `/api/auth/login` - Authentication
+- `/api/machines/data` - IoT data ingestion (simulates device authentication)
+- `/api/health` - Health check
+- `/` - API root
+
+**Protected Endpoints** (JWT Required):
+- All `/api/machines/*` except `/data`
+- All `/api/alerts/*`
+- `/api/auth/me`
+
+### Authorization Checks
+
+Protected endpoints utilize FastAPI's dependency injection:
+
+```python
+async def get_machines(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # current_user is automatically populated from JWT
+    # If token invalid/expired, 401 Unauthorized returned
+    machines = db.query(Machine).all()
+    return machines
+```
+
+### Security Best Practices Implemented
+
+1. **Password Storage**: Bcrypt hashing with automatic salting (never store plaintext)
+2. **SQL Injection Prevention**: SQLAlchemy ORM with parameterized queries
+3. **CORS Configuration**: Configured for development (allow all origins)
+4. **Input Validation**: Pydantic schemas validate all request payloads
+5. **Error Handling**: Generic error messages prevent information leakage
+6. **Connection Pooling**: Prevents connection exhaustion attacks
+7. **Token Expiration**: Automatic expiration reduces stolen token window
+
+### Token Storage in Node-RED
+
+```javascript
+// Store token after successful login
+flow.set("jwt_token", msg.payload.access_token);
+
+// Retrieve token for authenticated requests
+const token = flow.get("jwt_token");
+msg.headers = {
+    "Authorization": "Bearer " + token
+};
+```
+
+## 6. TECHNOLOGY STACK
+
+### Backend Technologies
+
+| Component | Technology | Version | Purpose |
+|-----------|-----------|---------|---------|
+| Runtime | Python | 3.13.7 | Core programming language |
+| Web Framework | FastAPI | 0.115.0 | Async web framework with automatic OpenAPI docs |
+| ASGI Server | Uvicorn | 0.32.0 | High-performance async server |
+| ORM | SQLAlchemy | 2.0.36 | Database abstraction and query builder |
+| GraphQL | Strawberry GraphQL | 0.243.0 | GraphQL schema and resolver framework |
+| Database Driver | psycopg | 3.2.3 | PostgreSQL adapter with binary protocol |
+| Authentication | python-jose | 3.3.0 | JWT token generation and validation |
+| Password Hashing | passlib | 1.7.4 | Password hashing with bcrypt support |
+| | bcrypt | 4.2.1 | Bcrypt algorithm implementation |
+| Data Validation | Pydantic | 2.9.2 | Data validation using Python type hints |
+| Migration Tool | Alembic | 1.13.3 | Database schema migrations |
+| Configuration | python-dotenv | 1.0.1 | Environment variable management |
+
+### Database Technologies
+
+| Component | Technology | Version | Purpose |
+|-----------|-----------|---------|---------|
+| RDBMS | PostgreSQL | 15 | Primary data store with ACID compliance |
+| Container Runtime | Docker | Latest | Containerized database deployment |
+| Database Client | DataGrip | N/A | Database IDE for development |
+
+### Frontend Technologies
+
+| Component | Technology | Version | Purpose |
+|-----------|-----------|---------|---------|
+| Runtime | Node.js | 22.20.0 | JavaScript runtime environment |
+| IoT Platform | Node-RED | Latest | Flow-based programming for IoT |
+| Dashboard | Node-RED Dashboard | Latest | UI components for visualization |
+| Visualization | Chart.js | (via Dashboard) | Real-time charts and gauges |
+
+### Development Tools
+
+| Tool | Purpose |
+|------|---------|
+| Visual Studio Code | Primary code editor with Python extensions |
+| DataGrip | Database management and SQL development |
+| Postman | API testing and endpoint validation |
+| Git | Version control system |
+| Docker Desktop | Container management on Windows |
+
+### Python Package Dependencies
+
+```txt
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+alembic==1.13.3
+strawberry-graphql[fastapi]==0.243.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+pydantic==2.9.2
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+python-dateutil==2.9.0
+pytz==2024.2
+email-validator==2.1.0
+```
+
+## 7. KEY DESIGN DECISIONS
+
+### Why PostgreSQL?
+
+**Rationale**:
+1. **ACID Compliance**: Ensures data consistency for financial production counts
+2. **Advanced Features**: Triggers, stored procedures, and views enable database-level logic
+3. **Time-Series Optimization**: Efficient indexing for timestamp-based queries
+4. **Relational Integrity**: Foreign keys enforce referential integrity between tables
+5. **Mature Ecosystem**: Excellent tooling, documentation, and community support
+6. **JSON Support**: Native JSONB type available for future semi-structured data needs
+
+**Alternative Considered**: InfluxDB (time-series database)
+**Decision**: PostgreSQL chosen for ACID guarantees and relational features despite InfluxDB's time-series optimizations
+
+### Why FastAPI?
+
+**Rationale**:
+1. **Async Performance**: Native async/await support for handling concurrent IoT data streams
+2. **Automatic Documentation**: OpenAPI and JSON Schema generation reduces documentation overhead
+3. **Type Safety**: Pydantic integration provides runtime type validation
+4. **Modern Python**: Leverages Python 3.7+ type hints for better IDE support
+5. **GraphQL Integration**: Strawberry GraphQL designed specifically for FastAPI
+6. **Production Ready**: Used by Netflix, Uber, and Microsoft in production systems
+
+**Alternative Considered**: Django REST Framework
+**Decision**: FastAPI chosen for superior async performance and modern Python features
+
+### Why Node-RED?
+
+**Rationale**:
+1. **Integrated Solution**: Single platform for both IoT simulation and dashboard
+2. **Visual Programming**: Flow-based development accelerates IoT logic implementation
+3. **Built-in Dashboard**: Native UI components eliminate need for separate frontend framework
+4. **IoT Ecosystem**: Extensive library of nodes for industrial protocols (MQTT, OPC-UA, Modbus)
+5. **Low Code**: Rapid prototyping without extensive JavaScript knowledge
+6. **Academic Context**: Demonstrates understanding of IoT platforms beyond traditional web development
+
+**Alternative Considered**: React + TypeScript + Socket.io
+**Decision**: Node-RED chosen for integrated IoT capabilities and reduced development complexity
+
+### Why JWT?
+
+**Rationale**:
+1. **Stateless**: No server-side session storage required, enabling horizontal scaling
+2. **Self-Contained**: Token includes all necessary information (username, expiration)
+3. **Industry Standard**: RFC 7519 specification with wide library support
+4. **Cross-Domain**: Enables future microservices architecture with shared authentication
+5. **Mobile Ready**: Token-based authentication compatible with mobile apps
+
+**Alternative Considered**: Session-based authentication with cookies
+**Decision**: JWT chosen for stateless architecture and scalability
+
+### Database Trigger Approach
+
+**Rationale**:
+1. **Atomic Operations**: Alert generation in same transaction as measurement insert
+2. **Single Source of Truth**: Business rules defined in database, not scattered across application layers
+3. **Performance**: Database-level evaluation faster than application-level queries
+4. **Consistency**: Alerts generated regardless of data source (API, direct insert, bulk import)
+5. **Auditability**: Trigger logic versioned in init.sql migration file
+
+**Alternative Considered**: Application-level alert generation in FastAPI
+**Decision**: Database triggers chosen for atomicity and centralized business logic
+
+**Trade-off**: Reduced application flexibility for business rule changes (requires migration), but gained consistency and performance
+
+## 8. API ENDPOINTS REFERENCE
+
+### REST API Complete Reference
+
+| Method | Endpoint | Auth | Request Body | Response | Description |
+|--------|----------|------|--------------|----------|-------------|
+| **Authentication** |
+| POST | /api/auth/register | No | `{"username": str, "email": str, "password": str, "full_name": str?}` | `{"id": int, "username": str, "email": str, "created_at": datetime}` | Register new user account |
+| POST | /api/auth/login | No | Form data: `username`, `password` | `{"access_token": str, "token_type": "bearer"}` | Authenticate and receive JWT token |
+| GET | /api/auth/me | Yes | N/A | `{"id": int, "username": str, "email": str}` | Get current authenticated user info |
+| **Machines** |
+| POST | /api/machines/data | No | `{"machine_id": str, "temperature": float, "vibration": int, "production_count": int, "fault": bool, "timestamp": datetime}` | `{"status": "success", "message": str, "machine_id": str, "timestamp": datetime}` | Receive telemetry data from IoT devices |
+| GET | /api/machines | Yes | N/A | `[{"id": int, "machine_id": str, "name": str, "location": str, "status": str, "created_at": datetime}]` | List all registered machines |
+| GET | /api/machines/status | Yes | N/A | `[{"machine_id": str, "temperature": float, "vibration": int, "production_count": int, "fault": bool, "last_updated": datetime}]` | Get current status snapshot of all machines |
+| GET | /api/machines/{machine_id}/measurements | Yes | Query: `limit` (default: 100) | `[{"id": int, "machine_id": str, "temperature": float, "vibration": int, "production_count": int, "fault": bool, "timestamp": datetime}]` | Get measurement history for specific machine |
+| GET | /api/machines/stats | Yes | Query: `start`, `end` (ISO datetime) | `{"total_production": int, "avg_temperature": float, "max_temperature": float, "min_temperature": float, "avg_vibration": float, "max_vibration": int, "min_vibration": int, "fault_count": int, "total_readings": int, "time_window": {...}}` | Get aggregated statistics with optional time filtering |
+| GET | /api/machines/measurements | Yes | Query: `start`, `end`, `limit` (max: 5000) | `{"count": int, "measurements": [...]}` | Get all measurements across machines |
+| GET | /api/machines/export/csv | Yes | Query: `start`, `end` | CSV file stream | Export measurements as downloadable CSV file |
+| **Alerts** |
+| GET | /api/alerts | Yes | Query: `resolved` (bool), `machine_id` (str) | `[{"id": int, "machine_id": str, "alert_type": str, "severity": str, "message": str, "resolved": bool, "created_at": datetime, "resolved_at": datetime?}]` | List alerts with optional filtering |
+| PATCH | /api/alerts/clear | Yes | N/A | `{"status": "success", "message": str}` | Mark all unresolved alerts as resolved |
+| PATCH | /api/alerts/{alert_id}/resolve | Yes | N/A | `{"status": "success", "message": str, "alert_id": int}` | Resolve specific alert by ID |
+| **Health** |
+| GET | /api/health | No | N/A | `{"status": "healthy", "timestamp": datetime}` | System health check endpoint |
+
+### GraphQL Schema Reference
+
+Access GraphQL playground at `http://localhost:8000/graphql`
+
+**Sample Query: Get All Machines with Current Status**
+```graphql
+query GetMachinesOverview {
+  machines {
+    machineId
+    name
+    location
+    status
+  }
+  allMachineStatuses {
+    machineId
+    temperature
+    vibration
+    productionCount
+    fault
+    lastUpdated
+  }
+}
+```
+
+**Sample Mutation: Add Measurement**
+```graphql
+mutation AddMeasurement {
+  addMeasurement(measurementInput: {
+    machineId: "MX-01"
+    temperature: 75.5
+    vibration: 30
+    productionCount: 18
+    fault: false
+    timestamp: "2025-11-27T10:00:00Z"
+  }) {
+    id
+    machineId
+    temperature
+    timestamp
+  }
+}
+```
+
+**Sample Subscription: Real-time Updates**
+```graphql
+subscription WatchMachine {
+  machineUpdates(machineId: "MX-01") {
+    machineId
+    temperature
+    vibration
+    productionCount
+    fault
+    lastUpdated
+  }
+}
+```
+
+## 9. DATABASE SCHEMA DOCUMENTATION
+
+### Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    USERS {
+        serial id PK
+        varchar_50 username UK "Unique login identifier"
+        varchar_100 email UK "User email address"
+        varchar_255 password_hash "Bcrypt hashed password"
+        timestamp created_at "Account creation time"
+    }
+
+    MACHINES {
+        serial id PK
+        varchar_20 machine_id UK "Equipment identifier (MX-01, MX-02, MX-03)"
+        varchar_100 name "Machine display name"
+        varchar_100 location "Physical location"
+        varchar_20 status "Operational status (active/inactive)"
+        timestamp created_at "Registration timestamp"
+    }
+
+    MEASUREMENTS {
+        serial id PK
+        varchar_20 machine_id FK "References machines.machine_id"
+        decimal_5_2 temperature "Temperature in Celsius"
+        integer vibration "Vibration level (0-100)"
+        integer production_count "Units per minute"
+        boolean fault "Fault flag"
+        timestamp timestamp "Measurement time"
+        timestamp created_at "Database insert time"
+    }
+
+    MACHINE_STATUS {
+        varchar_20 machine_id PK_FK "References machines.machine_id"
+        decimal_5_2 temperature "Current temperature"
+        integer vibration "Current vibration"
+        integer production_count "Current production rate"
+        boolean fault "Current fault status"
+        timestamp last_updated "Last update time"
+    }
+
+    ALERTS {
+        serial id PK
+        varchar_20 machine_id FK "References machines.machine_id"
+        varchar_50 alert_type "Alert category"
+        varchar_20 severity "critical, high, medium, low"
+        text message "Alert description"
+        boolean resolved "Resolution status"
+        timestamp created_at "Alert creation time"
+        timestamp resolved_at "Resolution time"
+    }
+
+    MACHINES ||--o{ MEASUREMENTS : "generates"
+    MACHINES ||--|| MACHINE_STATUS : "has_current_state"
+    MACHINES ||--o{ ALERTS : "triggers"
+```
+
+### Complete SQL Schema
 
 ```sql
 -- ============================================
--- TABLE: users
--- Purpose: JWT authentication and user management
+-- USERS TABLE
 -- ============================================
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -270,8 +993,7 @@ CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_email ON users(email);
 
 -- ============================================
--- TABLE: machines
--- Purpose: Machine catalog and metadata
+-- MACHINES TABLE
 -- ============================================
 CREATE TABLE machines (
     id SERIAL PRIMARY KEY,
@@ -287,9 +1009,7 @@ CREATE INDEX idx_machines_machine_id ON machines(machine_id);
 CREATE INDEX idx_machines_status ON machines(status);
 
 -- ============================================
--- TABLE: measurements
--- Purpose: Historical time-series data
--- Retention: 30 days (auto-cleanup via function)
+-- MEASUREMENTS TABLE (Time-Series Data)
 -- ============================================
 CREATE TABLE measurements (
     id SERIAL PRIMARY KEY,
@@ -302,14 +1022,15 @@ CREATE TABLE measurements (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- High-performance index for time-series queries
+-- Indexes for time-series queries
 CREATE INDEX idx_measurements_machine_timestamp
 ON measurements(machine_id, timestamp DESC);
 
+CREATE INDEX idx_measurements_timestamp
+ON measurements(timestamp DESC);
+
 -- ============================================
--- TABLE: machine_status
--- Purpose: Current state snapshot (optimized reads)
--- Pattern: Write-through cache
+-- MACHINE_STATUS TABLE (Current State Snapshot)
 -- ============================================
 CREATE TABLE machine_status (
     machine_id VARCHAR(20) PRIMARY KEY REFERENCES machines(machine_id) ON DELETE CASCADE,
@@ -321,8 +1042,7 @@ CREATE TABLE machine_status (
 );
 
 -- ============================================
--- TABLE: alerts
--- Purpose: System alerts and notifications
+-- ALERTS TABLE
 -- ============================================
 CREATE TABLE alerts (
     id SERIAL PRIMARY KEY,
@@ -335,20 +1055,97 @@ CREATE TABLE alerts (
     resolved_at TIMESTAMP
 );
 
--- Partial index for fast unresolved alerts queries
+-- Indexes
+CREATE INDEX idx_alerts_machine_id ON alerts(machine_id);
 CREATE INDEX idx_alerts_unresolved
-ON alerts(resolved, created_at DESC)
-WHERE resolved = FALSE;
-```
+ON alerts(resolved, created_at DESC) WHERE resolved = FALSE;
+CREATE INDEX idx_alerts_severity ON alerts(severity);
 
-#### Database Views
+-- ============================================
+-- CONSTRAINTS
+-- ============================================
+ALTER TABLE measurements
+    ADD CONSTRAINT chk_temperature CHECK (temperature >= -50 AND temperature <= 200),
+    ADD CONSTRAINT chk_vibration CHECK (vibration >= 0 AND vibration <= 100),
+    ADD CONSTRAINT chk_production_count CHECK (production_count >= 0);
 
-```sql
+ALTER TABLE alerts
+    ADD CONSTRAINT chk_severity CHECK (severity IN ('critical', 'high', 'medium', 'low'));
+
 -- ============================================
--- VIEW: machine_stats_24h
--- Purpose: 24-hour rolling statistics per machine
--- Usage: Reporting and analytics dashboards
+-- TRIGGER FUNCTIONS
 -- ============================================
+
+-- Function: Automatic alert generation on threshold violations
+CREATE OR REPLACE FUNCTION check_and_create_alert()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- High temperature alert (> 90°C = Critical)
+    IF NEW.temperature > 90 THEN
+        INSERT INTO alerts (machine_id, alert_type, severity, message)
+        VALUES (
+            NEW.machine_id,
+            'high_temperature',
+            'critical',
+            'Temperature exceeded 90°C: ' || NEW.temperature || '°C'
+        );
+    END IF;
+
+    -- High vibration alert (> 80 = High severity)
+    IF NEW.vibration > 80 THEN
+        INSERT INTO alerts (machine_id, alert_type, severity, message)
+        VALUES (
+            NEW.machine_id,
+            'high_vibration',
+            'high',
+            'Vibration exceeded safe threshold: ' || NEW.vibration
+        );
+    END IF;
+
+    -- Machine fault alert (Critical)
+    IF NEW.fault = TRUE THEN
+        INSERT INTO alerts (machine_id, alert_type, severity, message)
+        VALUES (
+            NEW.machine_id,
+            'machine_fault',
+            'critical',
+            'Machine reported a fault condition'
+        );
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function: Cleanup old measurements (data retention policy)
+CREATE OR REPLACE FUNCTION cleanup_old_measurements()
+RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER;
+BEGIN
+    DELETE FROM measurements
+    WHERE timestamp < NOW() - INTERVAL '30 days';
+
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================
+-- TRIGGERS
+-- ============================================
+
+-- Trigger: Automatic alert generation on new measurements
+CREATE TRIGGER trigger_alert_on_measurement
+AFTER INSERT ON measurements
+FOR EACH ROW
+EXECUTE FUNCTION check_and_create_alert();
+
+-- ============================================
+-- VIEWS FOR REPORTING
+-- ============================================
+
+-- View: 24-hour statistics per machine
 CREATE VIEW machine_stats_24h AS
 SELECT
     m.machine_id,
@@ -368,10 +1165,7 @@ LEFT JOIN measurements ms ON m.machine_id = ms.machine_id
 WHERE ms.timestamp > NOW() - INTERVAL '24 hours'
 GROUP BY m.machine_id, m.name, m.location;
 
--- ============================================
--- VIEW: active_alerts
--- Purpose: Active alerts with priority sorting
--- ============================================
+-- View: Active alerts with machine details
 CREATE VIEW active_alerts AS
 SELECT
     a.id,
@@ -395,10 +1189,7 @@ ORDER BY
     END,
     a.created_at DESC;
 
--- ============================================
--- VIEW: system_overview
--- Purpose: High-level system metrics
--- ============================================
+-- View: System overview KPIs
 CREATE VIEW system_overview AS
 SELECT
     (SELECT COUNT(*) FROM machines WHERE status = 'active') as active_machines,
@@ -409,2132 +1200,229 @@ SELECT
     (SELECT MAX(vibration) FROM machine_status) as max_system_vibration;
 ```
 
-#### Database Functions and Triggers
+### Sample Data Flow Through Tables
+
+**Scenario: New measurement received for MX-01 with high temperature**
 
 ```sql
--- ============================================
--- FUNCTION: cleanup_old_measurements
--- Purpose: Data retention management (30 days)
--- Schedule: Run daily via cron or pg_cron
--- ============================================
-CREATE OR REPLACE FUNCTION cleanup_old_measurements()
-RETURNS INTEGER AS $$
-DECLARE
-    deleted_count INTEGER;
-BEGIN
-    DELETE FROM measurements
-    WHERE timestamp < NOW() - INTERVAL '30 days';
+-- Step 1: Measurement inserted by FastAPI
+INSERT INTO measurements (machine_id, temperature, vibration, production_count, fault, timestamp)
+VALUES ('MX-01', 92.5, 35, 18, FALSE, '2025-11-27 10:15:30');
 
-    GET DIAGNOSTICS deleted_count = ROW_COUNT;
-    RETURN deleted_count;
-END;
-$$ LANGUAGE plpgsql;
+-- Step 2: Trigger automatically executes
+-- check_and_create_alert() function evaluates:
+--   - temperature (92.5) > 90 → TRUE → Insert alert
 
--- ============================================
--- FUNCTION: check_and_create_alert
--- Purpose: Automatic alert generation based on thresholds
--- Trigger: ON INSERT to measurements table
--- ============================================
-CREATE OR REPLACE FUNCTION check_and_create_alert()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Critical: Temperature > 90°C
-    IF NEW.temperature > 90 THEN
-        INSERT INTO alerts (machine_id, alert_type, severity, message)
-        VALUES (NEW.machine_id, 'high_temperature', 'critical',
-                'Temperature exceeded 90°C: ' || NEW.temperature || '°C');
-    END IF;
+-- Step 3: Alert created automatically
+INSERT INTO alerts (machine_id, alert_type, severity, message, resolved, created_at)
+VALUES ('MX-01', 'high_temperature', 'critical',
+        'Temperature exceeded 90°C: 92.5°C', FALSE, CURRENT_TIMESTAMP);
 
-    -- High: Vibration > 80
-    IF NEW.vibration > 80 THEN
-        INSERT INTO alerts (machine_id, alert_type, severity, message)
-        VALUES (NEW.machine_id, 'high_vibration', 'high',
-                'Vibration exceeded safe threshold: ' || NEW.vibration);
-    END IF;
+-- Step 4: Machine status updated (by FastAPI)
+UPDATE machine_status
+SET temperature = 92.5, vibration = 35, production_count = 18,
+    fault = FALSE, last_updated = '2025-11-27 10:15:30'
+WHERE machine_id = 'MX-01';
 
-    -- Critical: Fault condition
-    IF NEW.fault = TRUE THEN
-        INSERT INTO alerts (machine_id, alert_type, severity, message)
-        VALUES (NEW.machine_id, 'machine_fault', 'critical',
-                'Machine reported a fault condition');
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger definition
-CREATE TRIGGER trigger_alert_on_measurement
-AFTER INSERT ON measurements
-FOR EACH ROW
-EXECUTE FUNCTION check_and_create_alert();
+-- Step 5: Dashboard queries data
+SELECT * FROM machine_status;
+SELECT * FROM alerts WHERE resolved = FALSE;
 ```
 
-### 2.3 Data Dictionary
+### Data Retention Policy
 
-| Table | Column | Type | Constraints | Description |
-|-------|--------|------|-------------|-------------|
-| **users** | id | SERIAL | PK | Auto-incrementing user ID |
-| | username | VARCHAR(50) | UNIQUE, NOT NULL | Unique username for login |
-| | email | VARCHAR(100) | UNIQUE, NOT NULL | User email address |
-| | password_hash | VARCHAR(255) | NOT NULL | Bcrypt hashed password |
-| | created_at | TIMESTAMP | DEFAULT NOW() | Account creation timestamp |
-| **machines** | id | SERIAL | PK | Auto-incrementing machine ID |
-| | machine_id | VARCHAR(20) | UNIQUE, NOT NULL | Business key (e.g., MX-01) |
-| | name | VARCHAR(100) | NOT NULL | Human-readable machine name |
-| | location | VARCHAR(100) | | Physical location |
-| | status | VARCHAR(20) | DEFAULT 'active' | Operational status |
-| | created_at | TIMESTAMP | DEFAULT NOW() | Record creation timestamp |
-| **measurements** | id | SERIAL | PK | Auto-incrementing measurement ID |
-| | machine_id | VARCHAR(20) | FK → machines | Reference to machine |
-| | temperature | DECIMAL(5,2) | | Temperature in Celsius |
-| | vibration | INTEGER | | Vibration intensity (0-100) |
-| | production_count | INTEGER | | Production increment |
-| | fault | BOOLEAN | DEFAULT FALSE | Fault indicator |
-| | timestamp | TIMESTAMP | NOT NULL | Measurement timestamp |
-| | created_at | TIMESTAMP | DEFAULT NOW() | Database insert timestamp |
-| **machine_status** | machine_id | VARCHAR(20) | PK, FK → machines | Machine reference |
-| | temperature | DECIMAL(5,2) | | Current temperature |
-| | vibration | INTEGER | | Current vibration |
-| | production_count | INTEGER | | Cumulative production |
-| | fault | BOOLEAN | DEFAULT FALSE | Current fault state |
-| | last_updated | TIMESTAMP | NOT NULL | Last update timestamp |
-| **alerts** | id | SERIAL | PK | Auto-incrementing alert ID |
-| | machine_id | VARCHAR(20) | FK → machines | Machine reference |
-| | alert_type | VARCHAR(50) | NOT NULL | Alert category |
-| | severity | VARCHAR(20) | NOT NULL | critical/high/medium/low |
-| | message | TEXT | | Alert description |
-| | resolved | BOOLEAN | DEFAULT FALSE | Resolution status |
-| | created_at | TIMESTAMP | DEFAULT NOW() | Alert creation time |
-| | resolved_at | TIMESTAMP | | Resolution timestamp |
+- **Measurements**: 30-day retention (manual cleanup via `cleanup_old_measurements()` function)
+- **Alerts**: Indefinite retention (resolved alerts kept for audit trail)
+- **Machine Status**: Latest state only (UPSERT behavior)
+- **Users**: Indefinite retention
+
+## 10. DEPLOYMENT ARCHITECTURE
+
+### Local Development Setup
+
+The system is deployed locally with the following architecture:
+
+```
+Host Machine (Windows 10/11)
+├── Docker Desktop
+│   └── PostgreSQL Container
+│       ├── Image: postgres:15
+│       ├── Container Name: postgres-sis4415
+│       ├── Port Mapping: 5432:5432
+│       ├── Volume Mount: ./postgres/init.sql → /docker-entrypoint-initdb.d/
+│       └── Environment Variables:
+│           ├── POSTGRES_DB=sis4415_db
+│           ├── POSTGRES_USER=sis4415_user
+│           └── POSTGRES_PASSWORD=<password>
+│
+├── Python 3.13.7 Environment
+│   └── FastAPI Application
+│       ├── Entry Point: api/main.py
+│       ├── Run Command: uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+│       ├── Listening On: http://localhost:8000
+│       ├── Workers: 1 (development mode)
+│       └── Database Connection: postgresql://sis4415_user:<password>@localhost:5432/sis4415_db
+│
+└── Node.js v22.20.0 Environment
+    └── Node-RED Application
+        ├── Run Command: node-red
+        ├── Listening On: http://localhost:1880
+        ├── Flow Storage: ~/.node-red/flows/complete_integrated_flow.json
+        └── Dashboard UI: http://localhost:1880/ui
+```
+
+### Docker Configuration
+
+**PostgreSQL Container Startup**:
+```bash
+docker run -d \
+  --name postgres-sis4415 \
+  -e POSTGRES_DB=sis4415_db \
+  -e POSTGRES_USER=sis4415_user \
+  -e POSTGRES_PASSWORD=<password> \
+  -p 5432:5432 \
+  -v ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql \
+  postgres:15
+```
+
+**Database Initialization**:
+- On first startup, PostgreSQL executes `init.sql` from mounted volume
+- Creates all tables, indexes, views, functions, and triggers
+- Inserts initial machine data (MX-01, MX-02, MX-03)
+
+### FastAPI Startup
+
+**Development Mode**:
+```bash
+# Activate virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run FastAPI
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Environment Variables** (`.env` file):
+```env
+DATABASE_URL=postgresql://sis4415_user:<password>@localhost:5432/sis4415_db
+SECRET_KEY=<jwt-secret-key>
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+### Node-RED Startup
+
+```bash
+# Install Node-RED globally
+npm install -g node-red
+
+# Install dashboard nodes
+cd ~/.node-red
+npm install node-red-dashboard
+
+# Start Node-RED
+node-red
+```
+
+**Flow Import**:
+1. Navigate to http://localhost:1880
+2. Menu → Import → Select `flows/complete_integrated_flow.json`
+3. Deploy flows
+4. Access dashboard at http://localhost:1880/ui
+
+### Service Ports Summary
+
+| Service | Port | Protocol | Access URL |
+|---------|------|----------|------------|
+| PostgreSQL | 5432 | TCP | localhost:5432 (database clients) |
+| FastAPI | 8000 | HTTP | http://localhost:8000 |
+| FastAPI Docs | 8000 | HTTP | http://localhost:8000/docs (Swagger UI) |
+| GraphQL Playground | 8000 | HTTP | http://localhost:8000/graphql |
+| Node-RED Editor | 1880 | HTTP | http://localhost:1880 |
+| Node-RED Dashboard | 1880 | HTTP | http://localhost:1880/ui |
+
+### Network Communication
+
+All services communicate over localhost loopback interface:
+- **Node-RED → FastAPI**: HTTP requests to `http://localhost:8000`
+- **FastAPI → PostgreSQL**: PostgreSQL wire protocol to `localhost:5432`
+- **Browser → Node-RED**: HTTP/WebSocket to `http://localhost:1880`
+- **Browser → FastAPI**: Direct API access to `http://localhost:8000` (optional)
+
+### System Startup Sequence
+
+1. **Start PostgreSQL**: `docker start postgres-sis4415` (or run command if first time)
+2. **Verify Database**: Check logs for successful schema initialization
+3. **Start FastAPI**: `uvicorn api.main:app --reload`
+4. **Verify API**: Open http://localhost:8000/docs to confirm OpenAPI documentation loads
+5. **Start Node-RED**: `node-red`
+6. **Import Flows**: Load `complete_integrated_flow.json` if not already imported
+7. **Deploy Flows**: Click Deploy button in Node-RED editor
+8. **Access Dashboard**: Navigate to http://localhost:1880/ui
+9. **Login**: Use credentials to authenticate (default: admin/admin)
+10. **Verify Data Flow**: Check Overview tab to confirm simulator is sending data
+
+### Monitoring and Logs
+
+**FastAPI Logs**:
+- Console output from Uvicorn server
+- Shows HTTP request logs, query execution times, errors
+
+**Node-RED Logs**:
+- Console output from Node-RED runtime
+- Debug panel in editor shows flow execution
+- Debug nodes in flows log specific events
+
+**PostgreSQL Logs**:
+```bash
+docker logs postgres-sis4415
+```
+
+### Troubleshooting Common Issues
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| Database Connection Failed | FastAPI: "could not connect to server" | Verify PostgreSQL container is running: `docker ps` |
+| Port Already in Use | "Address already in use" error | Kill process using port or change port number |
+| JWT Authentication Failed | 401 Unauthorized on protected endpoints | Verify token not expired, check SECRET_KEY matches |
+| Node-RED Dashboard Blank | Empty dashboard UI | Import flows, click Deploy, refresh browser |
+| No Data in Dashboard | Gauges show zero | Verify simulator inject nodes are enabled and triggering |
+
+### Production Deployment Considerations
+
+For academic demonstration, local deployment is sufficient. For production deployment, consider:
+
+1. **Containerize FastAPI**: Create Dockerfile for FastAPI application
+2. **Use Docker Compose**: Orchestrate all services (PostgreSQL, FastAPI, Node-RED)
+3. **Environment Secrets**: Use Docker secrets or Kubernetes secrets for credentials
+4. **Reverse Proxy**: Nginx or Traefik for SSL termination and load balancing
+5. **Database Backups**: Automated pg_dump schedules
+6. **Monitoring**: Prometheus + Grafana for system metrics
+7. **Log Aggregation**: ELK stack or Loki for centralized logging
+8. **CI/CD Pipeline**: GitHub Actions or GitLab CI for automated deployments
+9. **Horizontal Scaling**: Multiple FastAPI instances behind load balancer
+10. **CDN**: CloudFlare or AWS CloudFront for static assets
 
 ---
 
-## 3. REST API Endpoints
-
-### 3.1 API Structure
-
-**Base URL:** `http://localhost:8000`
-**API Prefix:** `/api/v1`
-**Documentation:** `/docs` (Swagger UI), `/redoc` (ReDoc)
-
-### 3.2 Endpoint Catalog
-
-#### Health Check
-
-```http
-GET /api/v1/health
-```
-
-**Description:** System health check endpoint
-**Authentication:** None
-**Response:**
-```json
-{
-  "status": "healthy",
-  "database": "connected",
-  "timestamp": "2025-11-26T10:30:00Z"
-}
-```
-
----
-
-#### Authentication Endpoints
-
-##### Register New User
-
-```http
-POST /api/v1/auth/register
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "username": "john_doe",
-  "email": "john@example.com",
-  "password": "SecurePassword123!"
-}
-```
-
-**Response (201 Created):**
-```json
-{
-  "id": 1,
-  "username": "john_doe",
-  "email": "john@example.com",
-  "created_at": "2025-11-26T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Username or email already exists
-- `422 Unprocessable Entity` - Invalid request body
-
----
-
-##### Login
-
-```http
-POST /api/v1/auth/login
-Content-Type: application/x-www-form-urlencoded
-```
-
-**Request Body:**
-```
-username=admin&password=admin123
-```
-
-**Response (200 OK):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
-}
-```
-
-**Error Responses:**
-- `401 Unauthorized` - Invalid credentials
-
----
-
-##### Get Current User
-
-```http
-GET /api/v1/auth/me
-Authorization: Bearer <token>
-```
-
-**Response (200 OK):**
-```json
-{
-  "id": 1,
-  "username": "admin",
-  "email": "admin@smartproduction.com",
-  "created_at": "2025-11-26T10:30:00Z"
-}
-```
-
----
-
-#### Machine Endpoints
-
-##### Receive Machine Data (Node-RED)
-
-```http
-POST /api/v1/machines/data
-Content-Type: application/json
-```
-
-**Description:** Endpoint for Node-RED to send sensor data
-**Authentication:** None (public endpoint for IoT integration)
-**Request Body:**
-```json
-{
-  "machine_id": "MX-01",
-  "temperature": 72.5,
-  "vibration": 25,
-  "production_count": 5,
-  "fault": false,
-  "timestamp": "2025-11-26T10:30:00Z"
-}
-```
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "message": "Data received"
-}
-```
-
-**Error Responses:**
-- `404 Not Found` - Machine ID not found
-- `422 Unprocessable Entity` - Invalid data format
-
----
-
-##### List All Machines
-
-```http
-GET /api/v1/machines
-Authorization: Bearer <token>
-```
-
-**Description:** Get catalog of all machines
-**Authentication:** Required (JWT)
-**Response (200 OK):**
-```json
-[
-  {
-    "id": 1,
-    "machine_id": "MX-01",
-    "name": "Assembly Line Alpha",
-    "location": "Building A - Floor 1",
-    "status": "active",
-    "created_at": "2025-11-26T08:00:00Z"
-  },
-  {
-    "id": 2,
-    "machine_id": "MX-02",
-    "name": "Welding Station Beta",
-    "location": "Building A - Floor 2",
-    "status": "active",
-    "created_at": "2025-11-26T08:00:00Z"
-  },
-  {
-    "id": 3,
-    "machine_id": "MX-03",
-    "name": "Quality Control Gamma",
-    "location": "Building B - Floor 1",
-    "status": "active",
-    "created_at": "2025-11-26T08:00:00Z"
-  }
-]
-```
-
----
-
-##### Get Machines Status
-
-```http
-GET /api/v1/machines/status
-Authorization: Bearer <token>
-```
-
-**Description:** Get current status of all machines
-**Authentication:** Required (JWT)
-**Response (200 OK):**
-```json
-[
-  {
-    "machine_id": "MX-01",
-    "temperature": 72.5,
-    "vibration": 25,
-    "production_count": 1250,
-    "fault": false,
-    "last_updated": "2025-11-26T10:30:00Z"
-  },
-  {
-    "machine_id": "MX-02",
-    "temperature": 85.3,
-    "vibration": 35,
-    "production_count": 980,
-    "fault": false,
-    "last_updated": "2025-11-26T10:30:00Z"
-  },
-  {
-    "machine_id": "MX-03",
-    "temperature": 68.1,
-    "vibration": 18,
-    "production_count": 1450,
-    "fault": false,
-    "last_updated": "2025-11-26T10:30:00Z"
-  }
-]
-```
-
----
-
-##### Get Machine Measurements
-
-```http
-GET /api/v1/machines/{machine_id}/measurements?limit=100
-Authorization: Bearer <token>
-```
-
-**Description:** Get historical measurements for a specific machine
-**Authentication:** Required (JWT)
-**Parameters:**
-- `machine_id` (path) - Machine identifier (e.g., MX-01)
-- `limit` (query) - Number of records (default: 100)
-
-**Response (200 OK):**
-```json
-[
-  {
-    "id": 5432,
-    "machine_id": "MX-01",
-    "temperature": 72.5,
-    "vibration": 25,
-    "production_count": 5,
-    "fault": false,
-    "timestamp": "2025-11-26T10:30:00Z",
-    "created_at": "2025-11-26T10:30:01Z"
-  },
-  {
-    "id": 5431,
-    "machine_id": "MX-01",
-    "temperature": 71.8,
-    "vibration": 24,
-    "production_count": 4,
-    "fault": false,
-    "timestamp": "2025-11-26T10:29:58Z",
-    "created_at": "2025-11-26T10:29:59Z"
-  }
-]
-```
-
-**Error Responses:**
-- `404 Not Found` - No measurements found for machine
-
----
-
-### 3.3 Authentication Flow
-
-```
-Client                          API Server                     Database
-  │                                 │                              │
-  │ 1. POST /auth/register         │                              │
-  ├────────────────────────────────►│                              │
-  │    {username, email, password}  │                              │
-  │                                 │ 2. Hash password (bcrypt)    │
-  │                                 │ 3. INSERT INTO users         │
-  │                                 ├─────────────────────────────►│
-  │                                 │ 4. User created              │
-  │                                 │◄─────────────────────────────┤
-  │ 5. {id, username, email}       │                              │
-  │◄────────────────────────────────┤                              │
-  │                                 │                              │
-  │ 6. POST /auth/login            │                              │
-  ├────────────────────────────────►│                              │
-  │    {username, password}         │                              │
-  │                                 │ 7. SELECT user by username   │
-  │                                 ├─────────────────────────────►│
-  │                                 │ 8. User record               │
-  │                                 │◄─────────────────────────────┤
-  │                                 │ 9. Verify password (bcrypt)  │
-  │                                 │ 10. Generate JWT token       │
-  │ 11. {access_token, token_type} │                              │
-  │◄────────────────────────────────┤                              │
-  │                                 │                              │
-  │ 12. GET /machines              │                              │
-  │     Authorization: Bearer <JWT> │                              │
-  ├────────────────────────────────►│                              │
-  │                                 │ 13. Validate JWT signature   │
-  │                                 │ 14. Extract username         │
-  │                                 │ 15. SELECT machines          │
-  │                                 ├─────────────────────────────►│
-  │                                 │ 16. Machine list             │
-  │                                 │◄─────────────────────────────┤
-  │ 17. [machine objects]          │                              │
-  │◄────────────────────────────────┤                              │
-```
-
----
-
-## 4. GraphQL API Schema
-
-### 4.1 GraphQL Endpoint
-
-**URL:** `http://localhost:8000/graphql`
-**Protocol:** HTTP POST (queries/mutations), WebSocket (subscriptions)
-**Playground:** Interactive GraphQL IDE available at endpoint
-
-### 4.2 Schema Definition
-
-```graphql
-# ============================================
-# TYPES
-# ============================================
-
-type Machine {
-  machineId: String!
-  name: String!
-  location: String
-  status: String!
-  createdAt: DateTime!
-}
-
-type MachineStatus {
-  machineId: String!
-  temperature: Float
-  vibration: Int
-  productionCount: Int
-  fault: Boolean!
-  lastUpdated: DateTime!
-}
-
-type Measurement {
-  id: Int!
-  machineId: String!
-  temperature: Float
-  vibration: Int
-  productionCount: Int
-  fault: Boolean!
-  timestamp: DateTime!
-  createdAt: DateTime!
-}
-
-type Alert {
-  id: Int!
-  machineId: String!
-  alertType: String!
-  severity: String!
-  message: String
-  resolved: Boolean!
-  createdAt: DateTime!
-  resolvedAt: DateTime
-}
-
-type SystemStats {
-  totalMachines: Int!
-  activeMachines: Int!
-  totalMeasurements: Int!
-  activeAlerts: Int!
-  avgSystemTemperature: Float
-  maxSystemVibration: Int
-}
-
-# ============================================
-# QUERIES
-# ============================================
-
-type Query {
-  # Machine queries
-  machines: [Machine!]!
-  machine(machineId: String!): Machine
-
-  # Status queries
-  machinesStatus: [MachineStatus!]!
-  machineStatus(machineId: String!): MachineStatus
-
-  # Measurement queries
-  measurements(
-    machineId: String
-    limit: Int = 100
-    startTime: DateTime
-    endTime: DateTime
-  ): [Measurement!]!
-
-  # Alert queries
-  alerts(
-    machineId: String
-    resolved: Boolean
-    severity: String
-    limit: Int = 50
-  ): [Alert!]!
-
-  # System statistics
-  systemStats: SystemStats!
-}
-
-# ============================================
-# MUTATIONS
-# ============================================
-
-type Mutation {
-  # Alert management
-  resolveAlert(alertId: Int!): Alert!
-
-  # Machine management
-  updateMachineStatus(
-    machineId: String!
-    status: String!
-  ): Machine!
-}
-
-# ============================================
-# SUBSCRIPTIONS (WebSocket)
-# ============================================
-
-type Subscription {
-  # Real-time machine data (updates every 2 seconds)
-  liveMachineData: [MachineStatus!]!
-
-  # Real-time alerts
-  newAlert: Alert!
-}
-
-# ============================================
-# SCALARS
-# ============================================
-
-scalar DateTime
-```
-
-### 4.3 Query Examples
-
-#### Get System Overview
-
-```graphql
-query GetSystemOverview {
-  machines {
-    machineId
-    name
-    location
-    status
-  }
-  machinesStatus {
-    machineId
-    temperature
-    vibration
-    productionCount
-    fault
-    lastUpdated
-  }
-  systemStats {
-    totalMachines
-    activeMachines
-    totalMeasurements
-    activeAlerts
-    avgSystemTemperature
-    maxSystemVibration
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "data": {
-    "machines": [
-      {
-        "machineId": "MX-01",
-        "name": "Assembly Line Alpha",
-        "location": "Building A - Floor 1",
-        "status": "active"
-      },
-      {
-        "machineId": "MX-02",
-        "name": "Welding Station Beta",
-        "location": "Building A - Floor 2",
-        "status": "active"
-      },
-      {
-        "machineId": "MX-03",
-        "name": "Quality Control Gamma",
-        "location": "Building B - Floor 1",
-        "status": "active"
-      }
-    ],
-    "machinesStatus": [
-      {
-        "machineId": "MX-01",
-        "temperature": 72.5,
-        "vibration": 25,
-        "productionCount": 1250,
-        "fault": false,
-        "lastUpdated": "2025-11-26T10:30:00Z"
-      }
-    ],
-    "systemStats": {
-      "totalMachines": 3,
-      "activeMachines": 3,
-      "totalMeasurements": 54320,
-      "activeAlerts": 0,
-      "avgSystemTemperature": 71.5,
-      "maxSystemVibration": 35
-    }
-  }
-}
-```
-
----
-
-#### Get Recent Measurements
-
-```graphql
-query GetRecentMeasurements {
-  measurements(limit: 10) {
-    machineId
-    temperature
-    vibration
-    productionCount
-    timestamp
-  }
-}
-```
-
----
-
-#### Get Active Alerts
-
-```graphql
-query GetActiveAlerts {
-  alerts(resolved: false) {
-    id
-    machineId
-    alertType
-    severity
-    message
-    createdAt
-  }
-}
-```
-
----
-
-#### Resolve Alert (Mutation)
-
-```graphql
-mutation ResolveAlert {
-  resolveAlert(alertId: 123) {
-    id
-    resolved
-    resolvedAt
-  }
-}
-```
-
----
-
-### 4.4 Subscription Example
-
-#### Live Machine Data Stream
-
-```graphql
-subscription LiveMachineData {
-  liveMachineData {
-    machineId
-    temperature
-    vibration
-    productionCount
-    fault
-    lastUpdated
-  }
-}
-```
-
-**WebSocket Connection:**
-```javascript
-// Client-side JavaScript example
-const ws = new WebSocket('ws://localhost:8000/graphql');
-
-ws.send(JSON.stringify({
-  type: 'connection_init'
-}));
-
-ws.send(JSON.stringify({
-  id: '1',
-  type: 'start',
-  payload: {
-    query: `
-      subscription {
-        liveMachineData {
-          machineId
-          temperature
-          vibration
-          productionCount
-          fault
-          lastUpdated
-        }
-      }
-    `
-  }
-}));
-
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Real-time update:', data);
-};
-```
-
-**Stream Response (every 2 seconds):**
-```json
-{
-  "type": "data",
-  "id": "1",
-  "payload": {
-    "data": {
-      "liveMachineData": [
-        {
-          "machineId": "MX-01",
-          "temperature": 72.5,
-          "vibration": 25,
-          "productionCount": 1250,
-          "fault": false,
-          "lastUpdated": "2025-11-26T10:30:00Z"
-        },
-        {
-          "machineId": "MX-02",
-          "temperature": 85.3,
-          "vibration": 35,
-          "productionCount": 980,
-          "fault": false,
-          "lastUpdated": "2025-11-26T10:30:00Z"
-        },
-        {
-          "machineId": "MX-03",
-          "temperature": 68.1,
-          "vibration": 18,
-          "productionCount": 1450,
-          "fault": false,
-          "lastUpdated": "2025-11-26T10:30:00Z"
-        }
-      ]
-    }
-  }
-}
-```
-
----
-
-## 5. End-to-End Data Flow
-
-### 5.1 Complete Data Pipeline
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ STEP 1: IoT Simulation (Node-RED)                                      │
-│ Interval: 2 seconds (configurable 1-10s)                               │
-└─────────────────────────────────────────────────────────────────────────┘
-                               │
-                               │ Generate sensor data:
-                               │ • Temperature: Random in range
-                               │ • Vibration: Random in range
-                               │ • Production: Random increment
-                               │ • Fault: Randomly injected
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Machine Simulators (Function Nodes)                                    │
-│                                                                         │
-│ MX-01: temp=60-90°C, vib=10-40, prod=0-10                             │
-│ MX-02: temp=65-95°C, vib=15-45, prod=0-8                              │
-│ MX-03: temp=55-85°C, vib=10-35, prod=0-12                             │
-└─────────────────────────────────────────────────────────────────────────┘
-                               │
-                               │ JSON payload:
-                               │ {
-                               │   "machine_id": "MX-01",
-                               │   "temperature": 72.5,
-                               │   "vibration": 25,
-                               │   "production_count": 5,
-                               │   "fault": false,
-                               │   "timestamp": "2025-11-26T10:30:00Z"
-                               │ }
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ STEP 2: HTTP Request (Node-RED)                                        │
-│ POST http://localhost:8000/api/v1/machines/data                        │
-│ Content-Type: application/json                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-                               │
-                               │ Network: HTTP/1.1
-                               │ Latency: ~10-50ms (localhost)
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ STEP 3: FastAPI Server (Uvicorn ASGI)                                  │
-│ Endpoint: /api/v1/machines/data                                        │
-│ Handler: receive_machine_data()                                        │
-└─────────────────────────────────────────────────────────────────────────┘
-                               │
-                               │ 3.1: Validate request (Pydantic)
-                               │ 3.2: Check machine exists
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ STEP 4: Database Operations (SQLAlchemy ORM)                           │
-│                                                                         │
-│ Transaction Start                                                       │
-│ ├─► INSERT INTO measurements (...) VALUES (...)                        │
-│ │                                                                       │
-│ ├─► TRIGGER: trigger_alert_on_measurement                              │
-│ │   └─► IF temperature > 90 THEN INSERT INTO alerts (...)             │
-│ │   └─► IF vibration > 80 THEN INSERT INTO alerts (...)               │
-│ │   └─► IF fault = TRUE THEN INSERT INTO alerts (...)                 │
-│ │                                                                       │
-│ ├─► UPDATE machine_status SET                                          │
-│ │       temperature = 72.5,                                            │
-│ │       vibration = 25,                                                │
-│ │       production_count = production_count + 5,                       │
-│ │       fault = false,                                                 │
-│ │       last_updated = '2025-11-26T10:30:00Z'                          │
-│ │   WHERE machine_id = 'MX-01'                                         │
-│ │                                                                       │
-│ └─► COMMIT                                                             │
-└─────────────────────────────────────────────────────────────────────────┘
-                               │
-                               │ Success: 201 Created
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ STEP 5: Response to Node-RED                                           │
-│ {"status": "success", "message": "Data received"}                      │
-└─────────────────────────────────────────────────────────────────────────┘
-                               │
-                               │ Data now available via:
-                               │ • REST API (GET endpoints)
-                               │ • GraphQL (queries)
-                               │ • WebSocket (subscriptions)
-                               ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ STEP 6: Data Consumption                                               │
-│                                                                         │
-│ ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐      │
-│ │ Node-RED Dashbd  │  │ GraphQL Clients  │  │ External Apps    │      │
-│ │ GET /machines/   │  │ subscription {   │  │ REST API calls   │      │
-│ │     status       │  │   liveMachineData│  │ with JWT         │      │
-│ └──────────────────┘  └──────────────────┘  └──────────────────┘      │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### 5.2 Data Flow Timing Diagram
-
-```
-Time   Node-RED          FastAPI             PostgreSQL         GraphQL WS
-(ms)                                                            Clients
-─────────────────────────────────────────────────────────────────────────
-  0    Generate data
-       MX-01, MX-02,
-       MX-03
-
- 10    POST /data ────►
-       (3 requests)
-
- 20                     Validate ───────► BEGIN TX
-                        requests
-
- 30                                       INSERT measurements
-                                         (3 rows)
-
- 40                                       TRIGGER checks
-                                         (alert thresholds)
-
- 50                                       UPDATE machine_status
-                                         (3 rows)
-
- 60                                       COMMIT TX
-
- 70                     ◄────────────── Success
-
- 80    ◄──────────── 201 Created
-       (3 responses)
-
- 90                     Broadcast ───────────────────────────► WS Push
-                        via WS                                  (new data)
-                        subscription
-
-2000   [Repeat cycle every 2 seconds]
-```
-
-### 5.3 Data Persistence Strategy
-
-#### Write Path (Node-RED → Database)
-1. **Dual-write pattern:**
-   - Insert to `measurements` table (historical record)
-   - Upsert to `machine_status` table (current snapshot)
-
-2. **Consistency guarantee:**
-   - Both writes in same database transaction
-   - ACID properties ensure atomicity
-
-3. **Trigger execution:**
-   - Automatic alert generation on threshold violations
-   - Executes within same transaction
-
-#### Read Path (Clients → Database)
-1. **Current status queries:**
-   - Read from `machine_status` table (O(1) lookup)
-   - Optimized for low latency
-
-2. **Historical queries:**
-   - Read from `measurements` table with time-range filter
-   - Index on `(machine_id, timestamp DESC)` for fast scans
-
-3. **Aggregated reports:**
-   - Use materialized views (`machine_stats_24h`)
-   - Pre-computed statistics
-
----
-
-## 6. Security Architecture
-
-### 6.1 Authentication Mechanism
-
-#### JWT (JSON Web Token) Implementation
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ JWT Token Structure                                                     │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│ HEADER                                                                  │
-│ {                                                                       │
-│   "alg": "HS256",    ← HMAC-SHA256 algorithm                          │
-│   "typ": "JWT"                                                          │
-│ }                                                                       │
-│                                                                         │
-│ PAYLOAD                                                                 │
-│ {                                                                       │
-│   "sub": "admin",           ← Subject (username)                       │
-│   "exp": 1732621800,        ← Expiration (Unix timestamp)              │
-│   "iat": 1732620000         ← Issued at                                │
-│ }                                                                       │
-│                                                                         │
-│ SIGNATURE                                                               │
-│ HMACSHA256(                                                             │
-│   base64UrlEncode(header) + "." +                                       │
-│   base64UrlEncode(payload),                                             │
-│   SECRET_KEY                ← Stored in environment variable           │
-│ )                                                                       │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-
-Final Token:
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTczMjYyMTgwMCwiaWF0IjoxNzMyNjIwMDAwfQ.SIGNATURE_HASH
-```
-
-#### Password Security
-
-```python
-# Hashing Algorithm: bcrypt with salt rounds
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Password storage flow:
-plaintext_password = "admin123"
-                ↓
-hashed_password = pwd_context.hash(plaintext_password)
-# Result: $2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LeWgdx5SbHa0X0YRi
-                ↓
-Store in database (users.password_hash)
-
-# Password verification flow:
-provided_password = "admin123"
-stored_hash = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LeWgdx5SbHa0X0YRi"
-                ↓
-is_valid = pwd_context.verify(provided_password, stored_hash)
-# Result: True
-```
-
-### 6.2 Authorization Flow
-
-```
-┌─────────────┐                  ┌─────────────┐                  ┌──────────┐
-│   Client    │                  │  API Server │                  │ Database │
-└──────┬──────┘                  └──────┬──────┘                  └────┬─────┘
-       │                                │                              │
-       │ 1. POST /auth/login           │                              │
-       │    {username, password}        │                              │
-       ├───────────────────────────────►│                              │
-       │                                │ 2. Verify credentials         │
-       │                                ├─────────────────────────────►│
-       │                                │◄─────────────────────────────┤
-       │                                │ 3. Generate JWT (30 min TTL) │
-       │ 4. {access_token}             │                              │
-       │◄───────────────────────────────┤                              │
-       │                                │                              │
-       │ [Client stores token]          │                              │
-       │                                │                              │
-       │ 5. GET /machines               │                              │
-       │    Authorization: Bearer <JWT> │                              │
-       ├───────────────────────────────►│                              │
-       │                                │ 6. Validate JWT:             │
-       │                                │    ✓ Signature valid?        │
-       │                                │    ✓ Not expired?            │
-       │                                │    ✓ Subject exists?         │
-       │                                │                              │
-       │                                │ 7. Extract username from JWT │
-       │                                │ 8. Query machines            │
-       │                                ├─────────────────────────────►│
-       │                                │◄─────────────────────────────┤
-       │ 9. [machine list]             │                              │
-       │◄───────────────────────────────┤                              │
-       │                                │                              │
-       │                                │                              │
-       │ After 30 minutes:              │                              │
-       │                                │                              │
-       │ 10. GET /machines              │                              │
-       │     Authorization: Bearer <JWT>│                              │
-       ├───────────────────────────────►│                              │
-       │                                │ 11. Validate JWT:            │
-       │                                │     ✗ Token expired          │
-       │ 12. 401 Unauthorized           │                              │
-       │◄───────────────────────────────┤                              │
-       │                                │                              │
-       │ 13. Re-login required          │                              │
-```
-
-### 6.3 Endpoint Security Matrix
-
-| Endpoint | Authentication | Authorization | Public Access |
-|----------|---------------|---------------|---------------|
-| `GET /` | ❌ None | ❌ None | ✅ Yes |
-| `GET /api/v1/health` | ❌ None | ❌ None | ✅ Yes |
-| `POST /api/v1/auth/register` | ❌ None | ❌ None | ✅ Yes |
-| `POST /api/v1/auth/login` | ❌ None | ❌ None | ✅ Yes |
-| `POST /api/v1/machines/data` | ❌ None | ❌ None | ✅ Yes (IoT) |
-| `GET /api/v1/auth/me` | ✅ JWT | ✅ Self | ❌ No |
-| `GET /api/v1/machines` | ✅ JWT | ✅ Authenticated | ❌ No |
-| `GET /api/v1/machines/status` | ✅ JWT | ✅ Authenticated | ❌ No |
-| `GET /api/v1/machines/{id}/measurements` | ✅ JWT | ✅ Authenticated | ❌ No |
-| `GraphQL queries` | ⚠️ Optional | ⚠️ Optional | ⚠️ Mixed |
-| `GraphQL subscriptions` | ⚠️ Optional | ⚠️ Optional | ⚠️ Mixed |
-
-**Note:** `/machines/data` is intentionally public to allow Node-RED integration without token management complexity. In production, this should be secured with API keys or IP whitelisting.
-
-### 6.4 Security Best Practices Implemented
-
-#### ✅ Implemented
-- **Password Hashing:** bcrypt with automatic salt generation
-- **JWT Signing:** HMAC-SHA256 with secret key
-- **Token Expiration:** 30-minute TTL (configurable)
-- **CORS Middleware:** Cross-origin request handling
-- **SQL Injection Protection:** SQLAlchemy parameterized queries
-- **Input Validation:** Pydantic schemas for all request bodies
-- **HTTPS Ready:** Production deployment with TLS/SSL
-
-#### ⚠️ Production Recommendations
-- **Rate Limiting:** Implement request throttling (e.g., 100 req/min per IP)
-- **API Key for IoT:** Replace public `/machines/data` with API key auth
-- **Refresh Tokens:** Implement refresh token rotation
-- **Role-Based Access Control (RBAC):** Add user roles (admin, operator, viewer)
-- **Audit Logging:** Log all authentication attempts and data modifications
-- **Input Sanitization:** Additional validation for XSS prevention
-- **Database Encryption:** Enable PostgreSQL TDE (Transparent Data Encryption)
-- **Secrets Management:** Use AWS Secrets Manager or HashiCorp Vault
-
----
-
-## 7. AWS Deployment Architecture
-
-### 7.1 Production Infrastructure Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              AWS Cloud                                  │
-│                         Region: us-east-1                               │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │
-┌───────────────────────────────────┼─────────────────────────────────────┐
-│                       Route 53 DNS Service                              │
-│                                   │                                     │
-│  smartproduction.example.com ────►│                                     │
-│  api.smartproduction.example.com  │                                     │
-└───────────────────────────────────┼─────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                 CloudFront CDN (Optional)                               │
-│  • TLS/SSL termination                                                  │
-│  • DDoS protection (AWS Shield)                                         │
-│  • Geographic distribution                                              │
-└───────────────────────────────────┬─────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│              Application Load Balancer (ALB)                            │
-│  • Health checks: /api/v1/health                                        │
-│  • SSL/TLS certificate (ACM)                                            │
-│  • Target groups: ECS tasks                                             │
-│  • Availability Zones: us-east-1a, us-east-1b                          │
-└─────────────────────────────────────────────────────────────────────────┘
-                    │                              │
-                    │                              │
-    ┌───────────────┴────────────┐    ┌───────────┴────────────┐
-    │  Availability Zone 1a      │    │  Availability Zone 1b  │
-    │  (Primary)                 │    │  (Failover)            │
-    └────────────────────────────┘    └────────────────────────┘
-                    │                              │
-    ┌───────────────▼────────────┐    ┌───────────▼────────────┐
-    │  Public Subnet             │    │  Public Subnet         │
-    │  10.0.1.0/24               │    │  10.0.2.0/24           │
-    └────────────────────────────┘    └────────────────────────┘
-                    │                              │
-    ┌───────────────▼────────────┐    ┌───────────▼────────────┐
-    │  ECS Fargate Tasks         │    │  ECS Fargate Tasks     │
-    │                            │    │                        │
-    │  ┌──────────────────────┐  │    │  ┌──────────────────┐  │
-    │  │ FastAPI Container    │  │    │  │ FastAPI Container│  │
-    │  │ • 2 vCPU             │  │    │  │ • 2 vCPU         │  │
-    │  │ • 4 GB RAM           │  │    │  │ • 4 GB RAM       │  │
-    │  │ • Port 8000          │  │    │  │ • Port 8000      │  │
-    │  └──────────────────────┘  │    │  └──────────────────┘  │
-    │                            │    │                        │
-    │  ┌──────────────────────┐  │    │  ┌──────────────────┐  │
-    │  │ Node-RED Container   │  │    │  │ Node-RED Contain │  │
-    │  │ • 1 vCPU             │  │    │  │ • 1 vCPU         │  │
-    │  │ • 2 GB RAM           │  │    │  │ • 2 GB RAM       │  │
-    │  │ • Port 1880          │  │    │  │ • Port 1880      │  │
-    │  └──────────────────────┘  │    │  └──────────────────┘  │
-    └────────────────────────────┘    └────────────────────────┘
-                    │                              │
-                    └──────────────┬───────────────┘
-                                   │
-                   ┌───────────────▼────────────┐
-                   │  Private Subnet            │
-                   │  10.0.10.0/24              │
-                   └────────────────────────────┘
-                                   │
-                   ┌───────────────▼────────────┐
-                   │  Amazon RDS PostgreSQL     │
-                   │                            │
-                   │  • Instance: db.t3.medium  │
-                   │  • Multi-AZ: Enabled       │
-                   │  • Storage: 100 GB SSD     │
-                   │  • Automated backups       │
-                   │  • Read replicas: 1        │
-                   └────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       Supporting Services                               │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐     │
-│  │ Amazon ECR       │  │ AWS Secrets      │  │ Amazon S3        │     │
-│  │ (Docker Images)  │  │ Manager          │  │ (Static Assets)  │     │
-│  │                  │  │ • DB credentials │  │ • Logs           │     │
-│  │ • fastapi:latest │  │ • JWT secret     │  │ • Backups        │     │
-│  │ • nodered:latest │  │ • API keys       │  │ • Reports        │     │
-│  └──────────────────┘  └──────────────────┘  └──────────────────┘     │
-│                                                                         │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐     │
-│  │ CloudWatch       │  │ X-Ray            │  │ SNS              │     │
-│  │ (Monitoring)     │  │ (Tracing)        │  │ (Alerts)         │     │
-│  │                  │  │                  │  │                  │     │
-│  │ • Logs           │  │ • Performance    │  │ • Email alerts   │     │
-│  │ • Metrics        │  │ • Debugging      │  │ • SMS alerts     │     │
-│  │ • Alarms         │  │ • Service map    │  │ • PagerDuty      │     │
-│  └──────────────────┘  └──────────────────┘  └──────────────────┘     │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### 7.2 Infrastructure as Code (Terraform)
-
-```hcl
-# main.tf - High-level infrastructure configuration
-
-# VPC Configuration
-resource "aws_vpc" "smart_production" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = {
-    Name        = "smart-production-vpc"
-    Environment = "production"
-  }
-}
-
-# ECS Cluster
-resource "aws_ecs_cluster" "main" {
-  name = "smart-production-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-}
-
-# Fargate Task Definition - FastAPI
-resource "aws_ecs_task_definition" "fastapi" {
-  family                   = "fastapi-task"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = "2048"  # 2 vCPU
-  memory                   = "4096"  # 4 GB
-  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "fastapi"
-      image     = "${aws_ecr_repository.fastapi.repository_url}:latest"
-      essential = true
-
-      portMappings = [
-        {
-          containerPort = 8000
-          protocol      = "tcp"
-        }
-      ]
-
-      environment = [
-        {
-          name  = "ALGORITHM"
-          value = "HS256"
-        },
-        {
-          name  = "ACCESS_TOKEN_EXPIRE_MINUTES"
-          value = "30"
-        }
-      ]
-
-      secrets = [
-        {
-          name      = "DATABASE_URL"
-          valueFrom = aws_secretsmanager_secret.db_url.arn
-        },
-        {
-          name      = "SECRET_KEY"
-          valueFrom = aws_secretsmanager_secret.jwt_secret.arn
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/fastapi"
-          "awslogs-region"        = "us-east-1"
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 60
-      }
-    }
-  ])
-}
-
-# RDS PostgreSQL
-resource "aws_db_instance" "postgresql" {
-  identifier             = "smart-production-db"
-  engine                 = "postgres"
-  engine_version         = "16.1"
-  instance_class         = "db.t3.medium"
-  allocated_storage      = 100
-  storage_type           = "gp3"
-  storage_encrypted      = true
-
-  db_name  = "smart_production"
-  username = "sis4415_user"
-  password = random_password.db_password.result
-
-  multi_az               = true
-  publicly_accessible    = false
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-
-  deletion_protection = true
-  skip_final_snapshot = false
-  final_snapshot_identifier = "smart-production-final-snapshot"
-
-  tags = {
-    Name        = "smart-production-db"
-    Environment = "production"
-  }
-}
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "smart-production-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection = true
-  enable_http2               = true
-  enable_cross_zone_load_balancing = true
-
-  tags = {
-    Name        = "smart-production-alb"
-    Environment = "production"
-  }
-}
-
-# Auto Scaling
-resource "aws_appautoscaling_target" "ecs" {
-  max_capacity       = 10
-  min_capacity       = 2
-  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.fastapi.name}"
-  scalable_dimension = "ecs:service:DesiredCount"
-  service_namespace  = "ecs"
-}
-
-resource "aws_appautoscaling_policy" "cpu" {
-  name               = "cpu-autoscaling"
-  policy_type        = "TargetTrackingScaling"
-  resource_id        = aws_appautoscaling_target.ecs.resource_id
-  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
-  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
-
-  target_tracking_scaling_policy_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ECSServiceAverageCPUUtilization"
-    }
-    target_value = 70.0
-  }
-}
-```
-
-### 7.3 Deployment Pipeline (CI/CD)
-
-```yaml
-# .github/workflows/deploy-production.yml
-
-name: Deploy to AWS Production
-
-on:
-  push:
-    branches:
-      - main
-
-env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY_FASTAPI: smart-production-fastapi
-  ECR_REPOSITORY_NODERED: smart-production-nodered
-  ECS_CLUSTER: smart-production-cluster
-  ECS_SERVICE_FASTAPI: fastapi-service
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
-
-      - name: Run tests
-        run: pytest --cov=api tests/
-
-  build-and-push:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Build, tag, and push FastAPI image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_FASTAPI:$IMAGE_TAG \
-                       -t $ECR_REGISTRY/$ECR_REPOSITORY_FASTAPI:latest \
-                       -f Dockerfile.fastapi .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_FASTAPI --all-tags
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Deploy to ECS
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE_FASTAPI }} \
-            --force-new-deployment
-
-      - name: Wait for deployment
-        run: |
-          aws ecs wait services-stable \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_SERVICE_FASTAPI }}
-```
-
-### 7.4 Disaster Recovery Strategy
-
-| Scenario | RTO* | RPO** | Recovery Procedure |
-|----------|------|-------|-------------------|
-| **Single AZ failure** | 5 min | 0 | Automatic failover to AZ 1b |
-| **RDS primary failure** | 2 min | 0 | Automatic failover to Multi-AZ standby |
-| **ECS task crash** | 1 min | 0 | Auto-restart via health checks |
-| **Complete region failure** | 4 hours | 15 min | Manual failover to us-west-2 (backup region) |
-| **Data corruption** | 1 hour | 24 hours | Restore from RDS automated backup |
-| **Security breach** | 30 min | 0 | Rotate secrets, deploy new tasks |
-
-*RTO = Recovery Time Objective
-**RPO = Recovery Point Objective
-
----
-
-## 8. Cost Estimation
-
-### 8.1 Monthly AWS Cost Breakdown
-
-#### Compute - ECS Fargate
-
-| Service | Configuration | Hours/Month | Unit Cost | Monthly Cost |
-|---------|---------------|-------------|-----------|--------------|
-| **FastAPI Tasks** | 2 vCPU, 4 GB RAM | 1440 (2 tasks × 720h) | $0.04048/hour | $58.29 |
-| **Node-RED Tasks** | 1 vCPU, 2 GB RAM | 720 (1 task × 720h) | $0.02024/hour | $14.57 |
-| **Subtotal** | | | | **$72.86** |
-
-#### Database - RDS PostgreSQL
-
-| Component | Configuration | Monthly Cost |
-|-----------|---------------|--------------|
-| **Instance** | db.t3.medium (Multi-AZ) | $120.00 |
-| **Storage** | 100 GB GP3 SSD | $11.50 |
-| **Backup Storage** | 50 GB (7-day retention) | $2.30 |
-| **Data Transfer** | 10 GB out | $0.90 |
-| **Subtotal** | | **$134.70** |
-
-#### Load Balancing
-
-| Service | Configuration | Monthly Cost |
-|---------|---------------|--------------|
-| **Application Load Balancer** | 1 ALB | $16.20 |
-| **LCU Hours** | ~100 LCUs/month | $7.20 |
-| **Subtotal** | | **$23.40** |
-
-#### Storage - S3
-
-| Usage | Volume | Monthly Cost |
-|-------|--------|--------------|
-| **Standard Storage** | 50 GB (logs, backups) | $1.15 |
-| **Requests** | 10,000 PUT, 100,000 GET | $0.06 |
-| **Data Transfer** | 5 GB out | $0.45 |
-| **Subtotal** | | **$1.66** |
-
-#### Container Registry - ECR
-
-| Component | Volume | Monthly Cost |
-|-----------|--------|--------------|
-| **Storage** | 5 GB (Docker images) | $0.50 |
-| **Data Transfer** | 10 GB out | $0.90 |
-| **Subtotal** | | **$1.40** |
-
-#### Monitoring and Logging
-
-| Service | Configuration | Monthly Cost |
-|---------|---------------|--------------|
-| **CloudWatch Logs** | 10 GB ingestion, 30-day retention | $5.00 |
-| **CloudWatch Metrics** | 50 custom metrics | $1.50 |
-| **CloudWatch Alarms** | 10 alarms | $1.00 |
-| **X-Ray Tracing** | 100,000 traces | $5.00 |
-| **Subtotal** | | **$12.50** |
-
-#### Secrets Management
-
-| Service | Configuration | Monthly Cost |
-|---------|---------------|--------------|
-| **Secrets Manager** | 5 secrets | $2.00 |
-| **API calls** | 10,000 calls | $0.40 |
-| **Subtotal** | | **$2.40** |
-
-#### Networking
-
-| Component | Configuration | Monthly Cost |
-|-----------|---------------|--------------|
-| **VPC** | Standard VPC (free) | $0.00 |
-| **NAT Gateway** | 1 NAT Gateway | $32.40 |
-| **Data Transfer** | 50 GB processed | $2.25 |
-| **Subtotal** | | **$34.65** |
-
----
-
-### 8.2 Total Monthly Cost Summary
-
-| Category | Monthly Cost | Annual Cost |
-|----------|-------------|-------------|
-| **Compute (Fargate)** | $72.86 | $874.32 |
-| **Database (RDS)** | $134.70 | $1,616.40 |
-| **Load Balancing** | $23.40 | $280.80 |
-| **Storage (S3)** | $1.66 | $19.92 |
-| **Container Registry (ECR)** | $1.40 | $16.80 |
-| **Monitoring (CloudWatch + X-Ray)** | $12.50 | $150.00 |
-| **Secrets Management** | $2.40 | $28.80 |
-| **Networking** | $34.65 | $415.80 |
-| **TOTAL** | **$283.57** | **$3,402.84** |
-
-### 8.3 Cost Optimization Strategies
-
-#### Immediate Savings (0-3 months)
-
-1. **Reserved Instances for RDS** (-37% on database)
-   - Commitment: 1-year partial upfront
-   - Savings: ~$50/month
-   - New DB cost: $84.70/month
-
-2. **Fargate Spot Instances** (-70% on non-critical tasks)
-   - Apply to Node-RED tasks (fault-tolerant)
-   - Savings: ~$10/month
-   - New compute cost: $62.86/month
-
-3. **S3 Lifecycle Policies**
-   - Move logs to Glacier after 30 days
-   - Savings: ~$0.50/month
-
-4. **CloudWatch Log Retention**
-   - Reduce retention to 7 days (vs. 30)
-   - Savings: ~$3/month
-
-**Total Monthly Savings:** ~$63.50
-**Optimized Monthly Cost:** **$220.07**
-
-#### Long-term Savings (6-12 months)
-
-1. **Savings Plans for Fargate** (-52% on compute)
-   - Commitment: 1-year compute savings plan
-   - Additional savings: ~$30/month
-
-2. **Multi-tenant Database**
-   - Consolidate dev/staging environments
-   - Reduce to 1 RDS instance
-   - Savings: ~$120/month (eliminate staging DB)
-
-3. **CloudFront Caching**
-   - Cache static GraphQL responses
-   - Reduce ALB data transfer
-   - Savings: ~$5/month
-
-**Total Optimized Annual Cost:** ~$1,800 (47% reduction)
-
-### 8.4 Scaling Cost Projections
-
-#### Scenario 1: 10x Machine Growth (30 machines)
-
-| Resource | Baseline | 10x Scale | Multiplier |
-|----------|----------|-----------|------------|
-| Fargate tasks | 2 | 6 | 3x CPU |
-| RDS instance | t3.medium | r5.large | 2.5x cost |
-| Storage | 100 GB | 500 GB | 5x size |
-| **Monthly Cost** | $220 | $580 | 2.6x |
-
-#### Scenario 2: High-frequency Data (1-second intervals)
-
-| Resource | Current (2s) | High-freq (1s) | Impact |
-|----------|--------------|----------------|--------|
-| Database writes/day | 129,600 | 259,200 | 2x IOPS |
-| RDS instance | t3.medium | r5.xlarge | 3x cost |
-| Storage growth | 5 GB/month | 10 GB/month | 2x growth |
-| **Monthly Cost** | $220 | $420 | 1.9x |
-
----
-
-## 9. Scalability Strategy
-
-### 9.1 Horizontal Scaling Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      HORIZONTAL SCALING STRATEGY                        │
-└─────────────────────────────────────────────────────────────────────────┘
-
-                         ┌──────────────────────┐
-                         │  Application Load    │
-                         │     Balancer         │
-                         └──────────┬───────────┘
-                                    │
-                    ┌───────────────┼───────────────┐
-                    │               │               │
-         ┌──────────▼─────┐  ┌─────▼──────┐  ┌────▼───────┐
-         │ ECS Task 1     │  │ ECS Task 2 │  │ ECS Task N │
-         │ (FastAPI)      │  │ (FastAPI)  │  │ (FastAPI)  │
-         │                │  │            │  │            │
-         │ CPU: 40%       │  │ CPU: 45%   │  │ CPU: 35%   │
-         └────────┬───────┘  └─────┬──────┘  └────┬───────┘
-                  │                │              │
-                  └────────────────┼──────────────┘
-                                   │
-                         ┌─────────▼──────────┐
-                         │ RDS PostgreSQL     │
-                         │ (Read Replicas)    │
-                         │                    │
-                         │ Master ──► Replica │
-                         └────────────────────┘
-
-Auto-scaling Rules:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IF    avg(CPU) > 70%  for 2 minutes  ──► Scale OUT (+1 task)
-IF    avg(CPU) < 30%  for 5 minutes  ──► Scale IN  (-1 task)
-IF    requests/sec > 1000             ──► Scale OUT (+2 tasks)
-IF    RDS connections > 80%           ──► Add read replica
-
-Limits:
-  • Min tasks: 2
-  • Max tasks: 10
-  • Cooldown: 5 minutes
-```
-
-### 9.2 Database Scaling Strategies
-
-#### Read Scaling (Current Implementation)
-
-```
-┌───────────────────────────────────────────────────────────────────┐
-│                    PostgreSQL Multi-AZ Setup                      │
-└───────────────────────────────────────────────────────────────────┘
-
-   ┌──────────────────┐                    ┌──────────────────┐
-   │  Primary (AZ-1a) │                    │ Standby (AZ-1b)  │
-   │                  │                    │                  │
-   │  • All WRITES    │ ──── Sync Rep ───► │  • Hot standby   │
-   │  • All READS     │                    │  • Auto-failover │
-   └──────────────────┘                    └──────────────────┘
-           │
-           │ Asynchronous replication
-           ▼
-   ┌──────────────────┐
-   │ Read Replica     │
-   │ (Optional)       │
-   │                  │
-   │  • READ-ONLY     │
-   │  • Analytics     │
-   │  • Reporting     │
-   └──────────────────┘
-```
-
-**Read Replica Configuration:**
-```sql
--- Application-level read/write splitting
--- Write operations (SQLAlchemy)
-engine_write = create_engine(
-    "postgresql://user:pass@primary.rds.amazonaws.com:5432/db"
-)
-
--- Read operations (Analytics, Reports)
-engine_read = create_engine(
-    "postgresql://user:pass@replica.rds.amazonaws.com:5432/db"
-)
-
-# Route queries intelligently
-@app.get("/machines/stats")
-def get_stats(db: Session = Depends(get_read_db)):
-    # Uses read replica for analytics
-    return db.query(MachineStats24h).all()
-
-@app.post("/machines/data")
-def receive_data(db: Session = Depends(get_write_db)):
-    # Uses primary for writes
-    db.add(new_measurement)
-    db.commit()
-```
-
-#### Write Scaling (Partitioning Strategy)
-
-```sql
--- Time-series partitioning for measurements table
--- Automatically create monthly partitions
-
--- Parent table
-CREATE TABLE measurements (
-    id SERIAL,
-    machine_id VARCHAR(20),
-    temperature DECIMAL(5,2),
-    vibration INTEGER,
-    production_count INTEGER,
-    fault BOOLEAN,
-    timestamp TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) PARTITION BY RANGE (timestamp);
-
--- Partitions (auto-created via cron job)
-CREATE TABLE measurements_2025_11
-PARTITION OF measurements
-FOR VALUES FROM ('2025-11-01') TO ('2025-12-01');
-
-CREATE TABLE measurements_2025_12
-PARTITION OF measurements
-FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
-
--- Indexes on each partition
-CREATE INDEX idx_measurements_2025_11_machine_timestamp
-ON measurements_2025_11(machine_id, timestamp DESC);
-
--- Query optimizer automatically selects correct partition
-SELECT * FROM measurements
-WHERE timestamp BETWEEN '2025-11-15' AND '2025-11-20'
-  AND machine_id = 'MX-01';
--- Only scans measurements_2025_11 partition
-```
-
-**Benefits:**
-- Query performance: 10x faster on historical queries
-- Maintenance: Drop old partitions instead of DELETE
-- Parallelization: Queries scan partitions concurrently
-
-### 9.3 Caching Strategy
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        CACHING ARCHITECTURE                             │
-└─────────────────────────────────────────────────────────────────────────┘
-
-Client
-  │
-  │ 1. GET /machines/status
-  ▼
-┌────────────────────┐
-│   Redis Cache      │  ← In-memory key-value store
-│   (ElastiCache)    │
-│                    │
-│  Key: "machines:   │  TTL: 2 seconds
-│        status:all" │
-│                    │
-│  Value: [          │
-│    {machine_id:..} │
-│  ]                 │
-└────────┬───────────┘
-         │
-         │ Cache MISS
-         ▼
-┌────────────────────┐
-│  PostgreSQL DB     │
-│                    │
-│  SELECT * FROM     │
-│  machine_status    │
-└────────────────────┘
-         │
-         │ Store in cache
-         └──────────────────────────┐
-                                    ▼
-                          ┌─────────────────┐
-                          │ Update cache    │
-                          │ SET key, value  │
-                          │ EXPIRE key, 2   │
-                          └─────────────────┘
-
-Cache Strategy per Endpoint:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Endpoint                        Cache TTL    Invalidation
-──────────────────────────────────────────────────────────
-GET /machines                   1 hour       On machine update
-GET /machines/status            2 seconds    Write-through
-GET /machines/{id}/measurements 30 seconds   Time-based
-GraphQL: systemStats            5 seconds    Time-based
-GraphQL: machines               1 hour       On machine update
-```
-
-**Redis Implementation Example:**
-```python
-import redis
-from functools import wraps
-
-redis_client = redis.Redis(
-    host='redis.cache.amazonaws.com',
-    port=6379,
-    decode_responses=True
-)
-
-def cache(ttl=60):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            cache_key = f"{func.__name__}:{args}:{kwargs}"
-
-            # Try cache first
-            cached_value = redis_client.get(cache_key)
-            if cached_value:
-                return json.loads(cached_value)
-
-            # Cache miss - compute and store
-            result = func(*args, **kwargs)
-            redis_client.setex(
-                cache_key,
-                ttl,
-                json.dumps(result)
-            )
-            return result
-        return wrapper
-    return decorator
-
-@app.get("/machines/status")
-@cache(ttl=2)  # 2-second cache
-def get_machines_status(db: Session = Depends(get_db)):
-    statuses = db.query(MachineStatus).all()
-    return statuses
-```
-
-### 9.4 Message Queue Architecture (Future Enhancement)
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│              ASYNCHRONOUS PROCESSING WITH SQS + Lambda                  │
-└─────────────────────────────────────────────────────────────────────────┘
-
-Node-RED                  FastAPI                  SQS Queue
-  │                         │                         │
-  │ POST /machines/data     │                         │
-  ├────────────────────────►│                         │
-  │                         │                         │
-  │                         │ 1. Quick validation     │
-  │                         │ 2. Enqueue message      │
-  │                         ├────────────────────────►│
-  │                         │                         │
-  │ 201 Created             │                         │
-  │◄────────────────────────┤                         │
-  │                         │                         │
-  │                                                   │
-  │                                          ┌────────┴────────┐
-  │                                          │ Lambda Function │
-  │                                          │ (Auto-scaling)  │
-  │                                          │                 │
-  │                                          │ 1. Dequeue msg  │
-  │                                          │ 2. Process data │
-  │                                          │ 3. Write to DB  │
-  │                                          │ 4. Check alerts │
-  │                                          └────────┬────────┘
-  │                                                   │
-  │                                                   ▼
-  │                                          ┌────────────────┐
-  │                                          │  PostgreSQL    │
-  │                                          │  RDS           │
-  │                                          └────────────────┘
-
-Benefits:
-  ✓ Decoupled ingestion from processing
-  ✓ Handle traffic spikes (1000+ req/s)
-  ✓ Retry failed writes automatically
-  ✓ Dead-letter queue for anomalies
-```
-
-### 9.5 Performance Benchmarks
-
-| Metric | Current (2 tasks) | Scaled (10 tasks) | Target |
-|--------|------------------|-------------------|--------|
-| **Requests/second** | 500 | 2500 | < 5000 |
-| **Avg latency** | 45 ms | 38 ms | < 100 ms |
-| **P95 latency** | 120 ms | 95 ms | < 200 ms |
-| **P99 latency** | 250 ms | 180 ms | < 500 ms |
-| **Database connections** | 20 | 100 | < 200 |
-| **CPU utilization** | 35% | 60% | < 70% |
-| **Memory utilization** | 45% | 65% | < 80% |
-| **Error rate** | 0.01% | 0.01% | < 0.1% |
-
----
-
-## 10. Monitoring and Observability
-
-### 10.1 CloudWatch Dashboards
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                   PRODUCTION MONITORING DASHBOARD                       │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌───────────────────────────┐  ┌───────────────────────────┐          │
-│  │  ECS Task Health          │  │  API Latency (ms)         │          │
-│  │                           │  │                           │          │
-│  │  Running: ████████ 8/10   │  │  150┤                     │          │
-│  │  Stopped: ██ 2/10         │  │  100┤    ╱╲  ╱╲           │          │
-│  │                           │  │   50┤╱╲╱  ╲╱  ╲╱╲         │          │
-│  │  CPU Avg: 62%             │  │    0└────────────────────►│          │
-│  │  Memory: 3.1/4.0 GB       │  │       12:00      18:00    │          │
-│  └───────────────────────────┘  └───────────────────────────┘          │
-│                                                                         │
-│  ┌───────────────────────────┐  ┌───────────────────────────┐          │
-│  │  Database Performance     │  │  Request Rate (req/s)     │          │
-│  │                           │  │                           │          │
-│  │  Connections: 85/200      │  │  800┤            ╱╲       │          │
-│  │  IOPS: 1250/3000          │  │  600┤      ╱╲   ╱  ╲      │          │
-│  │  Storage: 82/100 GB       │  │  400┤  ╱╲╱  ╲╱       ╲    │          │
-│  │                           │  │  200┤╱                ╲╱  │          │
-│  │  Read Latency: 3.2 ms     │  │    0└────────────────────►│          │
-│  │  Write Latency: 8.1 ms    │  │       12:00      18:00    │          │
-│  └───────────────────────────┘  └───────────────────────────┘          │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────┐           │
-│  │  Active Alerts                                          │           │
-│  │                                                          │           │
-│  │  🔴 CRITICAL: High database connections (95%)           │           │
-│  │  🟡 WARNING: ECS task memory > 80%                      │           │
-│  │  🟢 INFO: Auto-scaled to 8 tasks                        │           │
-│  └─────────────────────────────────────────────────────────┘           │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### 10.2 CloudWatch Alarms Configuration
-
-```python
-# cloudwatch_alarms.tf
-
-# Critical: Database CPU > 90%
-resource "aws_cloudwatch_metric_alarm" "db_cpu_high" {
-  alarm_name          = "smart-production-db-cpu-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/RDS"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = "90"
-  alarm_description   = "Database CPU exceeds 90%"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-
-  dimensions = {
-    DBInstanceIdentifier = aws_db_instance.postgresql.id
-  }
-}
-
-# Critical: ECS Service Unhealthy
-resource "aws_cloudwatch_metric_alarm" "ecs_unhealthy_tasks" {
-  alarm_name          = "smart-production-ecs-unhealthy"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = "1"
-  metric_name         = "HealthyHostCount"
-  namespace           = "AWS/ApplicationELB"
-  period              = "60"
-  statistic           = "Average"
-  threshold           = "2"
-  alarm_description   = "Less than 2 healthy ECS tasks"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-  treat_missing_data  = "breaching"
-}
-
-# Warning: API Latency P99 > 500ms
-resource "aws_cloudwatch_metric_alarm" "api_latency_high" {
-  alarm_name                = "smart-production-api-latency-p99"
-  comparison_operator       = "GreaterThanThreshold"
-  evaluation_periods        = "2"
-  threshold                 = "500"
-  alarm_description         = "API P99 latency > 500ms"
-  insufficient_data_actions = []
-  alarm_actions            = [aws_sns_topic.alerts.arn]
-
-  metric_query {
-    id          = "m1"
-    return_data = true
-
-    metric {
-      metric_name = "TargetResponseTime"
-      namespace   = "AWS/ApplicationELB"
-      period      = "60"
-      stat        = "p99"
-
-      dimensions = {
-        LoadBalancer = aws_lb.main.arn_suffix
-      }
-    }
-  }
-}
-```
-
-### 10.3 Logging Strategy
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      STRUCTURED LOGGING FORMAT                          │
-└─────────────────────────────────────────────────────────────────────────┘
-
-{
-  "timestamp": "2025-11-26T10:30:00.123Z",
-  "level": "INFO",
-  "service": "fastapi",
-  "request_id": "abc123-def456",
-  "user_id": "admin",
-  "endpoint": "/api/v1/machines/data",
-  "method": "POST",
-  "status_code": 201,
-  "latency_ms": 45,
-  "machine_id": "MX-01",
-  "message": "Data ingestion successful",
-  "trace_id": "1-5f7e8d9a-3b2c1d0e9f8a7b6c5d4e3f2a"
-}
-
-Log Aggregation:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Source              Destination              Retention
-────────────────────────────────────────────────────────────
-ECS Container    ──► CloudWatch Logs      ──► 30 days
-                 ──► S3 Archive           ──► 1 year
-                 ──► ElasticSearch        ──► 7 days
-
-Query Examples (CloudWatch Insights):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Find all errors in last hour
-fields @timestamp, level, message, endpoint
-| filter level = "ERROR"
-| sort @timestamp desc
-| limit 100
-
-# Average latency per endpoint
-stats avg(latency_ms) by endpoint
-| filter @timestamp > ago(1h)
-
-# Top 10 slowest requests
-fields @timestamp, endpoint, latency_ms, request_id
-| sort latency_ms desc
-| limit 10
-```
-
-### 10.4 Distributed Tracing (X-Ray)
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         X-RAY SERVICE MAP                               │
-└─────────────────────────────────────────────────────────────────────────┘
-
-                        ┌──────────────┐
-                        │   Client     │
-                        └──────┬───────┘
-                               │ 450ms
-                               ▼
-                        ┌──────────────┐
-                        │     ALB      │
-                        └──────┬───────┘
-                               │ 2ms
-                               ▼
-                        ┌──────────────┐
-                        │   FastAPI    │
-                        │              │
-                        │  Request:    │
-                        │  POST /data  │
-                        └──────┬───────┘
-                               │
-                   ┌───────────┼───────────┐
-                   │ 5ms       │ 40ms      │ 3ms
-                   ▼           ▼           ▼
-            ┌──────────┐ ┌──────────┐ ┌──────────┐
-            │ Validate │ │PostgreSQL│ │  Redis   │
-            │ (Pydantic│ │  INSERT  │ │  SETEX   │
-            └──────────┘ └──────────┘ └──────────┘
-
-Trace Details:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Trace ID: 1-5f7e8d9a-3b2c1d0e9f8a7b6c5d4e3f2a
-Total Duration: 450ms
-Status: 200 OK
-
-Segments:
-  1. ALB              →  2ms   (HTTP routing)
-  2. FastAPI          → 45ms   (Application logic)
-     ├─ Validation    →  5ms   (Pydantic schemas)
-     ├─ DB Insert     → 40ms   (PostgreSQL write)
-     └─ Cache Update  →  3ms   (Redis write)
-```
-
----
-
-## Conclusion
-
-This architecture document provides a comprehensive technical overview of the **Smart Production Line Monitor** system, covering:
-
-- **Scalable microservices architecture** with FastAPI and Node-RED
-- **Robust database design** with PostgreSQL featuring triggers, views, and partitioning
-- **Secure authentication** using JWT and bcrypt
-- **Dual API strategy** with REST and GraphQL for flexibility
-- **Production-ready AWS deployment** with multi-AZ redundancy
-- **Cost-effective infrastructure** at ~$220/month with optimization strategies
-- **Horizontal scalability** supporting 10x growth
-- **Comprehensive monitoring** with CloudWatch, X-Ray, and structured logging
-
-The system is designed to handle real-time IoT data ingestion, provide low-latency API access, and scale to support industrial production environments.
-
----
-
-**Document Version:** 1.0.0
-**Last Updated:** November 26, 2025
-**Author:** Anibal Simeon Falcon Castro
-**License:** Academic Use - Universidad Anáhuac Mayab
+## Document Metadata
+
+- **Author**: Anibal Simeon Falcon Castro
+- **Project**: Smart Production Line Monitoring System (Industry 4.0)
+- **Course**: SIS4415 - Information in the Fourth (Industrial Revolution)
+- **Institution**: Universidad Anáhuac México
+- **Date**: 27 November 2025
+
+
+## References
+
+- FastAPI Documentation: https://fastapi.tiangolo.com/
+- SQLAlchemy Documentation: https://docs.sqlalchemy.org/
+- Strawberry GraphQL: https://strawberry.rocks/
+- Node-RED Documentation: https://nodered.org/docs/
+- PostgreSQL 15 Documentation: https://www.postgresql.org/docs/15/
+- JWT RFC 7519: https://datatracker.ietf.org/doc/html/rfc7519
+- Industry 4.0 Principles: https://en.wikipedia.org/wiki/Fourth_Industrial_Revolution

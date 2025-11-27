@@ -1,5 +1,5 @@
 import strawberry
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from decimal import Decimal
 
@@ -23,7 +23,6 @@ class MeasurementType:
     production_count: Optional[int]
     fault: bool
     timestamp: datetime
-    created_at: datetime
 
 
 @strawberry.type
@@ -36,21 +35,19 @@ class MachineStatusType:
     last_updated: datetime
 
 
-@strawberry.type
-class AlertType:
-    id: int
+@strawberry.input
+class MachineInput:
     machine_id: str
-    alert_type: str
-    severity: str
-    message: Optional[str]
-    resolved: bool
-    created_at: datetime
-    resolved_at: Optional[datetime]
+    name: str
+    location: Optional[str] = None
+    status: Optional[str] = "active"
 
 
-@strawberry.type
-class SystemStatsType:
-    total_machines: int
-    active_machines: int
-    total_measurements: int
-    active_alerts: int
+@strawberry.input
+class MeasurementInput:
+    machine_id: str
+    temperature: Optional[float] = None
+    vibration: Optional[int] = None
+    production_count: Optional[int] = None
+    fault: bool = False
+    timestamp: Optional[datetime] = None

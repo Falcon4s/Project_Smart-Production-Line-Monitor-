@@ -1,6 +1,5 @@
+from api.database import Base
 from api.models.user import User
-from api.models.machine import Machine
-from api.models.measurement import Measurement, MachineStatus
-from api.models.alert import Alert
+from api.models.machine import Machine, Measurement, MachineStatus, Alert
 
-__all__ = ["User", "Machine", "Measurement", "MachineStatus", "Alert"]
+__all__ = ["Base", "User", "Machine", "Measurement", "MachineStatus", "Alert"]
