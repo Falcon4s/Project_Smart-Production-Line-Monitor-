@@ -9,7 +9,7 @@
 
 ## Video Demonstration
 
-**Link:** [YouTube Video - System Demonstration](YOUR_VIDEO_LINK_HERE)
+**Link:** https://youtu.be/82AdWcQgD2c
 
 ---
 
